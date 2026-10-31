@@ -727,8 +727,8 @@ namespace {
     }
 
     // v2.14: a run outside practice where auto-release can press for you is marked on screen.
-    // v2.46 watermark: whenever the buffer is on (any stage but OFF) the level shows it, and
-    // can't be turned off, so runs made with the mod are recognisable.
+    // v2.46 watermark: whenever the buffer is on (any stage but OFF) the level shows it.
+    // v2.99: the "Remove watermark" setting hides it.
     void refreshWatermark() {
         if (!buf.watermark) {
             return;
@@ -736,7 +736,8 @@ namespace {
         // hidden in practice mode (practice runs can't be submitted, and on phones it sat on the
         // checkpoint buttons); always shown in normal mode while the buffer is on
         auto* layer = GameManager::get()->m_playLayer;
-        buf.watermark->setVisible(buf.enabled && !(layer && layer->m_isPracticeMode));
+        bool removed = Mod::get()->getSettingValue<bool>("remove-watermark");
+        buf.watermark->setVisible(buf.enabled && !removed && !(layer && layer->m_isPracticeMode));
         buf.watermark->setString(fmt::format("CBF  |  {}", stageText()).c_str());
     }
 
@@ -4805,6 +4806,7 @@ class BufferMenu : public geode::Popup {
         { "save-ding", "Ding on save" },
         { "performance-mode", "Performance mode" },
         { "explain-inputs", "Explain inputs" },
+        { "remove-watermark", "Remove watermark" },
     };
     static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Custom", "Tools" };
 
@@ -5300,9 +5302,10 @@ private:
     void pageTools() {
         heading("Tools", "What you see while playing, plus stats and the log.");
         float top = pageTop() - 40.f;
-        card(top + 12.f, 3 * ROW + 4.f);
+        float rows = static_cast<float>((std::size(TOOLS) + 1) / 2);
+        card(top + 12.f, rows * ROW + 4.f);
         optionGrid(TOOLS, std::size(TOOLS), top);
-        float y = top - 3 * ROW - 14.f;
+        float y = top - rows * ROW - 14.f;
         float bw = (W - SIDE - 46.f) / 3.f;
         float x0 = SIDE + 20.f + bw / 2.f;
         button(m_pageMenu, "Stats", menu_selector(BufferMenu::onStats), { x0, y }, bw);
@@ -5728,7 +5731,7 @@ $on_mod(Loaded) {
     if (Loader::get()->isModLoaded("square3ang.cbfextrapolate")) {
         say("CBF Extrapolate detected: visual only, predictions unaffected");
     }
-    say("v2.97.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
+    say("v2.99.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
 }
 
 class $modify(BufPlayLayer, PlayLayer) {
@@ -6388,6 +6391,8 @@ namespace {
 
 $on_mod(Loaded) {
     setupKeybinds();
+    // the settings popup can change it mid-level
+    listenForSettingChanges<bool>("remove-watermark", [](bool) { refreshWatermark(); });
 }
 
 // the main menu: a heart button that opens the menu (with the other buttons at the bottom)
