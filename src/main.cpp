@@ -5654,6 +5654,10 @@ public:
         return nullptr;
     }
 
+    static bool isOpen() {
+        return s_open != nullptr;
+    }
+
     // the menu key again closes it
     static void open() {
         if (s_open) {
@@ -6398,7 +6402,7 @@ namespace {
     // menu key is set to. It's read straight from the keyboard: Geode counts Right Shift
     // itself as a Shift modifier, so a plain "RightShift" keybind would never match.
     void onRightShift() {
-        if (BufferMenu::s_open) {
+        if (BufferMenu::isOpen()) {
             BufferMenu::open();  // closes it
             return;
         }
