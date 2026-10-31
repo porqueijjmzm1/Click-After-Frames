@@ -2,7 +2,7 @@ name: Build Mod
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, ccr-b5c0153f-magtn3]
 jobs:
   build:
     strategy:
