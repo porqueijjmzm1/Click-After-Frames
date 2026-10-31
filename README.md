@@ -82,3 +82,4 @@ Practice use only; do not use for verified or leaderboard runs.
 - v2.94: the pause menu has a button (purple heart, bottom right) for the menu again, so phones can open it inside a level.
 - v2.95: watermark back (v2.92 had dropped it) and smaller: "CBF | stage" in the bottom left, smaller still on phones, hidden in practice mode.
 - v2.97: v2.96 reverted (no per-frame time budget, TPS setting read every frame again).
+- v2.98: automatic updates removed (no update check, no popup, no downloads from GitHub; the "Check for updates" setting is gone).

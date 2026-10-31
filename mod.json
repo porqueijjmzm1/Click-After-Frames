@@ -5,7 +5,7 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v2.97.0",
+	"version": "v2.98.0",
 	"id": "basu.input-buffer",
 	"name": "Click Before Frames",
 	"developer": "BASU",
@@ -378,12 +378,6 @@
 			"type": "bool",
 			"name": "Auto time budget",
 			"description": "While the game is already dropping frames (a frame took over twice as long as it should, and over 20 ms), clicks get at most 4 ms of prediction time so it doesn't get worse. Otherwise the time budget setting is used as it is.",
-			"default": true
-		},
-		"check-updates": {
-			"type": "bool",
-			"name": "Check for updates",
-			"description": "On game start, check GitHub for a newer version and show a popup on the main menu if there is one. 'Update now' downloads it from the latest GitHub release and installs it; restart the game to use it.",
 			"default": true
 		},
 		"menu-theme": {
