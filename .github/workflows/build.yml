@@ -1,6 +1,11 @@
 name: Build Mod
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Version to publish as a release (e.g. v3.0.0); leave empty for a test build'
+        required: false
+        default: ''
   push:
     branches: [main, ccr-b5c0153f-magtn3]
     tags: ['v*']
@@ -37,25 +42,34 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: RELEASE_NOTES.md
+          sparse-checkout-cone-mode: false
       - uses: geode-sdk/build-geode-mod/combine@main
         id: build
       - uses: actions/upload-artifact@v4
         with:
           name: Build Output
           path: ${{ steps.build.outputs.build-output }}
-      # a version tag (v3.0.0, ...) publishes a real release with InputBuffer.geode; any other
-      # push replaces TESTEBUFFER.geode on the "teste" pre-release
+      # a release (run by hand with a version, or a v* tag) publishes InputBuffer.geode with
+      # RELEASE_NOTES.md; any other build replaces TESTEBUFFER.geode on the "teste" pre-release
       - name: Publish the .geode
         env:
           GH_TOKEN: ${{ github.token }}
           OUT: ${{ steps.build.outputs.build-output }}
+          RELEASE: ${{ inputs.release }}
         run: |
           file=$(find "$OUT" -name '*.geode' | head -n 1)
           test -n "$file"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          tag="$RELEASE"
+          if [[ -z "$tag" && "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+          fi
+          if [[ -n "$tag" ]]; then
             cp "$file" InputBuffer.geode
-            gh release create "$GITHUB_REF_NAME" InputBuffer.geode --repo "$GITHUB_REPOSITORY" \
-              --title "Input Buffer $GITHUB_REF_NAME" --notes-from-tag --latest
+            gh release create "$tag" InputBuffer.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Input Buffer $tag" --notes-file RELEASE_NOTES.md --latest
           else
             cp "$file" TESTEBUFFER.geode
             gh release delete teste --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
