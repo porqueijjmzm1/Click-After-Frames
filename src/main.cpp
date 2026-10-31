@@ -4807,6 +4807,7 @@ class BufferMenu : public geode::Popup {
         { "performance-mode", "Performance mode" },
         { "explain-inputs", "Explain inputs" },
         { "remove-watermark", "Remove watermark" },
+        { "hide-menu-buttons", "Hide menu buttons" },
     };
     static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Custom", "Tools" };
 
@@ -5692,6 +5693,7 @@ class $modify(BufPauseLayer, PauseLayer) {
         menu->setPosition({ win.width - 40.f, 40.f });
         menu->setID("click-before-frames-menu"_spr);
         this->addChild(menu, 10);
+        button->setVisible(!Mod::get()->getSettingValue<bool>("hide-menu-buttons"));
     }
 
     void onBufferMenu(CCObject*) {
@@ -5731,7 +5733,7 @@ $on_mod(Loaded) {
     if (Loader::get()->isModLoaded("square3ang.cbfextrapolate")) {
         say("CBF Extrapolate detected: visual only, predictions unaffected");
     }
-    say("v2.99.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
+    say("v2.100.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
 }
 
 class $modify(BufPlayLayer, PlayLayer) {
@@ -6376,6 +6378,40 @@ namespace {
         }
     }
 
+    // v2.100 "Hide menu buttons": shows / hides the heart buttons on the main menu and the
+    // pause menu right away (the bottom menu's layout skips hidden buttons).
+    void refreshMenuButtons() {
+        auto* scene = CCScene::get();
+        if (!scene) {
+            return;
+        }
+        bool hide = Mod::get()->getSettingValue<bool>("hide-menu-buttons");
+        if (auto* button = scene->getChildByIDRecursive("click-before-frames-button"_spr)) {
+            button->setVisible(!hide);
+            if (auto* parent = button->getParent()) {
+                parent->updateLayout();
+            }
+        }
+    }
+
+    // Right Shift opens / closes the menu in a level and on the main menu, whatever the
+    // menu key is set to. It's read straight from the keyboard: Geode counts Right Shift
+    // itself as a Shift modifier, so a plain "RightShift" keybind would never match.
+    void onRightShift() {
+        if (BufferMenu::s_open) {
+            BufferMenu::open();  // closes it
+            return;
+        }
+        if (GameManager::get()->m_playLayer) {
+            keyAction(1);
+            return;
+        }
+        auto* scene = CCScene::get();
+        if (scene && scene->getChildByID("MenuLayer") && !scene->getChildByType<FLAlertLayer>(0)) {
+            BufferMenu::open();
+        }
+    }
+
     void setupKeybinds() {
         char const* binds[] = { "bind-stage", "bind-menu", "bind-export", "bind-console", "bind-path", "bind-forget" };
         for (int i = 0; i < 6; ++i) {
@@ -6393,6 +6429,13 @@ $on_mod(Loaded) {
     setupKeybinds();
     // the settings popup can change it mid-level
     listenForSettingChanges<bool>("remove-watermark", [](bool) { refreshWatermark(); });
+    listenForSettingChanges<bool>("hide-menu-buttons", [](bool) { refreshMenuButtons(); });
+    KeyboardInputEvent().listen([](KeyboardInputData& data) {
+        if (data.key == KEY_RightShift && data.action == KeyboardInputData::Action::Press) {
+            onRightShift();
+        }
+        return ListenerResult::Propagate;
+    }).leak();
 }
 
 // the main menu: a heart button that opens the menu (with the other buttons at the bottom)
@@ -6407,6 +6450,7 @@ class $modify(BufMenuLayer, MenuLayer) {
         auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::DarkPurple, CircleBaseSize::Medium);
         auto* item = CCMenuItemSpriteExtra::create(sprite, this, menu_selector(BufMenuLayer::onBufferMenu));
         item->setID("click-before-frames-button"_spr);
+        item->setVisible(!Mod::get()->getSettingValue<bool>("hide-menu-buttons"));
         if (auto* bottom = this->getChildByID("bottom-menu")) {
             bottom->addChild(item);
             bottom->updateLayout();

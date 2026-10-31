@@ -84,3 +84,4 @@ Practice use only; do not use for verified or leaderboard runs.
 - v2.97: v2.96 reverted (no per-frame time budget, TPS setting read every frame again).
 - v2.98: automatic updates removed (no update check, no popup, no downloads from GitHub; the "Check for updates" setting is gone).
 - v2.99: "Remove watermark" setting (off by default, also a switch in the menu's Tools tab) hides the "CBF | stage" label in levels.
+- v2.100: "Hide menu buttons" setting (off by default, also a switch in the Tools tab) hides the heart buttons on the main menu and pause menu; Right Shift opens / closes the menu in a level and on the main menu.

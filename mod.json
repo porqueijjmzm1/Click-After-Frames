@@ -5,7 +5,7 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v2.99.0",
+	"version": "v2.100.0",
 	"id": "basu.input-buffer",
 	"name": "Click Before Frames",
 	"developer": "BASU",
@@ -298,6 +298,12 @@
 			"type": "bool",
 			"name": "Remove watermark",
 			"description": "Hide the 'CBF | stage' label shown in the bottom left of levels while the buffer is on.",
+			"default": false
+		},
+		"hide-menu-buttons": {
+			"type": "bool",
+			"name": "Hide menu buttons",
+			"description": "Hide the heart buttons on the main menu and the pause menu. The menu still opens with Right Shift (or the menu key). Phones without a keyboard: turn this off here to get the buttons back.",
 			"default": false
 		},
 		"cbf-sync": {
