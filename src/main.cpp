@@ -660,6 +660,43 @@ namespace {
     // the game is already dropping frames. v2.75 also capped every click at 45% of a frame:
     // at 240+ fps that was 2 ms, too short for a long cube jump's search (Penumbral's first
     // jump: only +1..+5 delays were ever tried, so most clicks got no save).
+    // v3.0.1 frame budget: every click and every search that goes on next tick (no-hitch) in
+    // the same rendered frame share one budget, a part of the frame (35% on PC, 30% on
+    // phones). A frame has several physics ticks (4 at 60 fps), and each search part used to
+    // get a fresh full budget, so one frame could hold 8-40 ms of predictions: the stutter
+    // on clicks. A search that runs out goes on next tick with what's left, and gets a fresh
+    // share in the next frame.
+    unsigned frameId = 0;
+    double frameSpent = 0.0;
+
+    double frameShareMs() {
+        double interval = CCDirector::get()->getAnimationInterval() * 1000.0;
+        if (interval <= 0.0) {
+            interval = 1000.0 / 60.0;
+        }
+#ifdef GEODE_IS_MOBILE
+        return std::clamp(interval * 0.3, 2.0, 5.0);
+#else
+        return std::clamp(interval * 0.35, 3.0, 6.0);
+#endif
+    }
+
+    double frameLeftMs() {
+        unsigned frame = CCDirector::get()->getTotalFrames();
+        if (frame != frameId) {
+            frameId = frame;
+            frameSpent = 0.0;
+        }
+        return frameShareMs() - frameSpent;
+    }
+
+    void addFrameTime(double ms) {
+        frameLeftMs();  // makes sure the time goes to this frame
+        frameSpent += ms;
+    }
+
+    bool resumeNow = false;
+
     void clickBudget() {
         double budget = buf.userBudget;
         if (buf.autoBudget) {
@@ -674,6 +711,10 @@ namespace {
             if (interval > 0.0 && frame > std::max(interval * 2.0, 20.0)) {
                 budget = std::min(budget, 4.0);
             }
+            // v3.0.1: never more than what's left of this frame's share. A new click always
+            // gets a little (it has to be decided now); a search going on gets less, and the
+            // rest of it moves on to the next ticks.
+            budget = std::min(budget, std::max(resumeNow ? 1.0 : 1.5, frameLeftMs()));
         }
         buf.budgetMs = budget;
     }
@@ -2754,6 +2795,7 @@ namespace {
             clickTimed = true;
         }
         ~ClickTimer() {
+            addFrameTime(clickMs());
             clickTimed = false;
         }
     };
@@ -3116,8 +3158,7 @@ namespace {
     // previous tick), and where the last search ran out of time (0 = it didn't)
     int searchFrom = 1;
     int budgetCutK = 0;
-    // set while a search is going on from a previous tick
-    bool resumeNow = false;
+    // set while a search is going on from a previous tick (resumeNow, declared with the frame budget)
     QueuedInput resumeEntry {};
     constexpr int MAX_RESUMES = 4;
 

@@ -5,7 +5,7 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v3.0.0",
+	"version": "v3.0.1",
 	"id": "timbodev.input-buffer",
 	"name": "Input Buffer",
 	"developer": "timbodev",
@@ -394,8 +394,8 @@
 		},
 		"auto-budget": {
 			"type": "bool",
-			"name": "Auto time budget",
-			"description": "While the game is already dropping frames (a frame took over twice as long as it should, and over 20 ms), clicks get at most 4 ms of prediction time so it doesn't get worse. Otherwise the time budget setting is used as it is.",
+			"name": "Auto time budget (no stutter)",
+			"description": "All predictions in one frame share a part of that frame (about 35% on PC, 30% on phones), so clicks don't make the game stutter; a search that runs out of time goes on over the next ticks. While the game is already dropping frames, clicks get at most 4 ms. Turn off to use the time budget setting as it is (longer searches, may stutter).",
 			"default": true
 		},
 		"menu-theme": {
