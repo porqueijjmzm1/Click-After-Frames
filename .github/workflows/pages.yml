@@ -3,7 +3,7 @@ name: Deploy site
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, ccr-b5c0153f-magtn3]
     paths: ['site/**', '.github/workflows/pages.yml']
 
 permissions:

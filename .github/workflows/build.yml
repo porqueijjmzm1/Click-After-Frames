@@ -9,6 +9,8 @@ on:
   push:
     branches: [main, ccr-b5c0153f-magtn3]
     tags: ['v*']
+    # the website alone doesn't need a new mod build
+    paths-ignore: ['site/**', '.github/workflows/pages.yml']
 jobs:
   build:
     strategy:

@@ -1,16 +1,17 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Input Buffer</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Input Buffer: mod de Geometry Dash (Geode) que segura cliques feitos cedo demais e solta no tick em que eles te salvam.">
+<meta name="description" content="Input Buffer: a Geometry Dash mod (Geode) that holds clicks you made too early and lets them go on the tick where they save you.">
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
+
 /* Layout: one wide playfield up top, then panels that read like the mod's own menu tabs, on a night-sky ground. */
 :root {
   --ink: #050918;
@@ -314,61 +315,96 @@ h3 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-sp
 .key b { font-weight: 600; font-size: 15px; }
 .key span { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
 
-/* in-game menu mock */
-.menu-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: center; }
-@media (max-width: 900px) { .menu-grid { grid-template-columns: 1fr; } }
+/* in-game menu (v3): dark window, sidebar tabs, tiles you tap anywhere */
+.mouse-i { display: inline-block; width: 1em; height: 1em; background: currentColor; -webkit-mask: url(mouse.png) center / contain no-repeat; mask: url(mouse.png) center / contain no-repeat; }
+.menu-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 36px; align-items: center; }
+@media (max-width: 960px) { .menu-grid { grid-template-columns: 1fr; } }
 .menu {
-  --m-acc: #a477ff; --m-acc-2: #6c3fe0; --m-bg: #0c0820; --m-bg-2: #160f35; --m-text: #f0eaff; --m-muted: #a99ccc;
-  position: relative; border-radius: 18px; overflow: hidden; color: var(--m-text);
-  background: radial-gradient(120% 90% at 80% 0%, var(--m-bg-2), var(--m-bg) 70%);
-  border: 2px solid color-mix(in srgb, var(--m-acc) 55%, transparent);
-  box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--m-acc) 70%, transparent);
-  transition: border-color .4s, box-shadow .4s;
-  isolation: isolate;
+  --m-main: #3e98ff; --m-soft: #b0d6ff;
+  --m-text: #eceff5; --m-muted: #8c94a8; --m-dim: #60677a; --m-good: #50de8c; --m-bad: #f05c68;
+  position: relative; border-radius: 16px; color: var(--m-text); font-family: var(--f-body);
+  background: #0f1117; border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 34px 80px -28px rgba(0, 0, 0, 0.95), 0 0 90px -40px var(--m-main);
+  transition: box-shadow .4s;
 }
-.menu[data-mt="pink"] { --m-acc: #ff7ac8; --m-acc-2: #d93f97; --m-bg: #1a0716; --m-bg-2: #34102b; --m-text: #ffeef8; --m-muted: #cf9fbd; }
-.menu[data-mt="blue"] { --m-acc: #4aa3ff; --m-acc-2: #2364d6; --m-bg: #050d22; --m-bg-2: #0c1d45; --m-text: #eaf3ff; --m-muted: #93aed6; }
-.menu[data-mt="green"] { --m-acc: #55e39a; --m-acc-2: #1f9d5f; --m-bg: #04140d; --m-bg-2: #0a2a1b; --m-text: #eafff3; --m-muted: #8fc9a9; }
-.menu[data-mt="dark"] { --m-acc: #c9d2e8; --m-acc-2: #6f7a96; --m-bg: #07080c; --m-bg-2: #12141c; --m-text: #f1f3f8; --m-muted: #9aa1b3; }
-.menu .stars, .menu .stars::before, .menu .stars::after {
-  position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image:
-    radial-gradient(1.4px 1.4px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 33% 72%, #fff, transparent),
-    radial-gradient(1.6px 1.6px at 58% 26%, #fff, transparent), radial-gradient(1px 1px at 76% 64%, #fff, transparent),
-    radial-gradient(1.2px 1.2px at 90% 12%, #fff, transparent), radial-gradient(1px 1px at 22% 90%, #fff, transparent),
-    radial-gradient(1.3px 1.3px at 47% 48%, #fff, transparent), radial-gradient(1px 1px at 66% 88%, #fff, transparent);
+.menu[data-mt="purple"] { --m-main: #926cff; --m-soft: #d0c0ff; }
+.menu[data-mt="pink"] { --m-main: #ff62b0; --m-soft: #ffc0e2; }
+.menu[data-mt="green"] { --m-main: #34cd7c; --m-soft: #b2f2cc; }
+.menu[data-mt="dark"] { --m-main: #7a8294; --m-soft: #e2e6ee; }
+.m-head { position: relative; display: flex; align-items: center; gap: 11px; padding: 11px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); background: rgba(255, 255, 255, 0.02); border-radius: 16px 16px 0 0; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.m-head::after { content: ""; position: absolute; left: 14px; bottom: -1px; width: 60%; height: 1px; background: linear-gradient(90deg, var(--m-main), transparent); }
+.m-logo { width: 34px; height: 34px; flex: none; border-radius: 9px; display: grid; place-items: center; font-size: 21px; color: var(--m-soft); background: color-mix(in srgb, var(--m-main) 20%, transparent); border: 1px solid color-mix(in srgb, var(--m-main) 70%, transparent); transition: .3s; }
+.m-title { display: grid; line-height: 1.15; }
+.m-title b { font-weight: 700; font-size: 15px; }
+.m-title small { color: var(--m-dim); font-size: 11px; font-family: var(--f-mono); }
+.m-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.m-saves { font-size: 12px; color: var(--m-muted); white-space: nowrap; }
+.m-saves b { color: var(--m-soft); font-variant-numeric: tabular-nums; }
+.m-pill { font: 700 11px var(--f-body); letter-spacing: .08em; padding: 4px 10px; border-radius: 999px; color: var(--m-good); background: color-mix(in srgb, var(--m-good) 14%, transparent); border: 1px solid color-mix(in srgb, var(--m-good) 50%, transparent); display: inline-flex; align-items: center; gap: 6px; }
+.m-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.m-pill.off { color: var(--m-bad); background: color-mix(in srgb, var(--m-bad) 14%, transparent); border-color: color-mix(in srgb, var(--m-bad) 50%, transparent); }
+.m-wrap { display: grid; grid-template-columns: 150px minmax(0, 1fr); }
+.m-side { margin: 10px 0 10px 10px; padding: 6px; border-radius: 11px; background: rgba(0, 0, 0, 0.24); border: 1px solid rgba(255, 255, 255, 0.05); display: grid; gap: 3px; align-content: start; }
+.m-side button { display: flex; align-items: center; gap: 9px; width: 100%; font: 600 13.5px var(--f-body); color: var(--m-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 10px; cursor: pointer; text-align: left; transition: color .2s, background .2s; position: relative; }
+.m-side button:hover { color: var(--m-text); background: rgba(255, 255, 255, 0.04); }
+.m-side button[aria-selected="true"] { color: var(--m-text); background: color-mix(in srgb, var(--m-main) 18%, transparent); }
+.m-side button[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--m-main); }
+.m-side svg { width: 15px; height: 15px; flex: none; }
+.m-page { padding: 14px 16px 16px; min-width: 0; min-height: 330px; display: grid; gap: 10px; align-content: start; }
+.m-page.anim { animation: pageIn .3s cubic-bezier(.2, .8, .2, 1); }
+@keyframes pageIn { from { opacity: 0; transform: translateY(8px); } }
+.m-h { font-weight: 700; font-size: 18px; margin: 0; }
+.m-info { color: var(--m-muted); font-size: 13px; margin: -8px 0 2px; }
+.m-sec { font: 700 10.5px var(--f-body); letter-spacing: .14em; color: var(--m-dim); margin-top: 4px; }
+.chips { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.chips button { font: 700 12px var(--f-body); color: var(--m-text); padding: 7px 2px; border-radius: 7px; cursor: pointer; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); transition: background .2s, transform .15s; white-space: nowrap; }
+.chips button:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.09); }
+.chips button:last-child { color: var(--m-muted); }
+.chips button[aria-pressed="true"] { background: var(--m-main); border-color: var(--m-main); color: #fff; box-shadow: 0 6px 18px -8px var(--m-main); }
+.m-status { color: var(--m-muted); font-size: 12.5px; }
+.presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.preset { position: relative; text-align: left; cursor: pointer; padding: 9px 10px 9px 18px; border-radius: 8px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); color: var(--m-text); font: inherit; transition: background .2s, transform .15s; min-width: 0; }
+.preset:hover { background: rgba(255, 255, 255, 0.07); transform: translateY(-1px); }
+.preset::before { content: ""; position: absolute; left: 8px; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; background: var(--m-main); opacity: var(--o); }
+.preset b { display: block; font-size: 13.5px; }
+.preset small { display: block; color: var(--m-muted); font-size: 11.5px; line-height: 1.3; }
+.m-card { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 11px; border-radius: 8px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); font-size: 14px; }
+.m-card .lbl { flex: 1; min-width: 0; }
+.m-card output { min-width: 46px; text-align: center; color: var(--m-soft); font-weight: 700; font-variant-numeric: tabular-nums; }
+.m-card output.warn { color: #ffb35a; }
+.m-b { font: 600 12.5px var(--f-body); color: var(--m-text); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 6px 11px; border-radius: 7px; cursor: pointer; transition: background .2s; white-space: nowrap; }
+.m-b:hover { background: color-mix(in srgb, var(--m-main) 30%, transparent); border-color: color-mix(in srgb, var(--m-main) 60%, transparent); }
+.m-b.acc { background: color-mix(in srgb, var(--m-main) 22%, transparent); border-color: color-mix(in srgb, var(--m-main) 55%, transparent); }
+.m-foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.m-foot span { flex: 1; color: var(--m-dim); font-size: 12px; min-width: 0; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; }
+.tile { display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer; padding: 8px 9px 8px 11px; border-radius: 8px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); color: var(--m-muted); font: 600 13px var(--f-body); transition: background .2s, color .2s, border-color .2s; min-width: 0; }
+.tile span { flex: 1; min-width: 0; }
+.tile:hover { background: rgba(255, 255, 255, 0.06); }
+.tile i { flex: none; position: relative; width: 26px; height: 15px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); transition: background .25s; }
+.tile i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .3s cubic-bezier(.2, 1.4, .4, 1); }
+.tile[aria-checked="true"] { color: var(--m-text); border-color: color-mix(in srgb, var(--m-main) 45%, transparent); background: color-mix(in srgb, var(--m-main) 10%, transparent); }
+.tile[aria-checked="true"] i { background: var(--m-main); box-shadow: 0 0 10px color-mix(in srgb, var(--m-main) 70%, transparent); }
+.tile[aria-checked="true"] i::after { transform: translateX(11px); }
+.frames { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; }
+.frow { display: flex; align-items: center; gap: 8px; padding: 4px 9px 4px 6px; border-radius: 8px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); min-width: 0; }
+.frow svg { width: 24px; height: 24px; flex: none; }
+.frow input { flex: 1; min-width: 0; accent-color: var(--m-main); }
+.frow output { width: 34px; text-align: right; font-size: 12.5px; font-weight: 700; color: var(--m-soft); font-variant-numeric: tabular-nums; }
+.frames.dim { opacity: .45; }
+.m-tools { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.m-tools .m-b { padding: 7px 4px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 620px) {
+  .m-wrap { grid-template-columns: 1fr; }
+  .m-side { margin: 10px 10px 0; display: flex; overflow-x: auto; scrollbar-width: none; }
+  .m-side button { width: auto; flex: none; }
+  .m-side button[aria-selected="true"]::before { left: 8px; right: 8px; top: auto; bottom: 0; width: auto; height: 2px; }
+  .chips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .presets, .tiles, .frames { grid-template-columns: 1fr; }
+  .m-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .m-saves { display: none; }
+  .m-page { min-height: 0; }
 }
-.menu .stars::before { content: ""; transform: translate(9%, 13%) scale(1.2); animation: twinkle 3.4s ease-in-out infinite; }
-.menu .stars::after { content: ""; transform: translate(-14%, 7%) rotate(9deg); animation: twinkle 4.2s ease-in-out infinite reverse; }
-@keyframes twinkle { 50% { opacity: .25; } }
-.menu .shoot { position: absolute; top: 10%; left: -20%; width: 120px; height: 2px; z-index: -1; background: linear-gradient(90deg, transparent, #fff); transform: rotate(-18deg); animation: shoot 6s ease-in infinite; opacity: 0; }
-@keyframes shoot { 0%, 80% { opacity: 0; transform: translate(0, 0) rotate(-18deg); } 82% { opacity: 1; } 100% { opacity: 0; transform: translate(560px, -150px) rotate(-18deg); } }
-.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 8px; cursor: grab; }
-.m-head img { width: 28px; height: 28px; border-radius: 7px; }
-.m-head b { font-family: "Orbitron", var(--f-display); font-size: 15px; letter-spacing: .06em; }
-.m-head .x { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--m-acc) 25%, transparent); color: var(--m-text); font-weight: 700; font-size: 14px; }
-.m-tabs { display: flex; gap: 4px; padding: 6px 12px; overflow-x: auto; scrollbar-width: none; }
-.m-tabs button {
-  font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--m-muted); background: transparent; border: 1px solid transparent; padding: 8px 11px; border-radius: 9px; cursor: pointer; white-space: nowrap; transition: .2s;
-}
-.m-tabs button[aria-selected="true"] { color: var(--m-text); background: color-mix(in srgb, var(--m-acc) 22%, transparent); border-color: color-mix(in srgb, var(--m-acc) 55%, transparent); }
-.m-body { padding: 8px 14px 16px; min-height: 290px; }
-.m-row { display: flex; align-items: center; gap: 12px; padding: 10px 6px; border-bottom: 1px solid color-mix(in srgb, var(--m-acc) 14%, transparent); font-size: 14.5px; }
-.m-row:last-child { border-bottom: 0; }
-.m-row .lbl { flex: 1; min-width: 0; }
-.m-row .lbl small { display: block; color: var(--m-muted); font-size: 12px; line-height: 1.35; }
-.sw { position: relative; width: 44px; height: 24px; border-radius: 999px; border: 0; cursor: pointer; flex: none; background: color-mix(in srgb, var(--m-muted) 30%, transparent); transition: background .25s; }
-.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .3s cubic-bezier(.2, 1.4, .4, 1); box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
-.sw[aria-checked="true"] { background: var(--m-acc); box-shadow: 0 0 14px color-mix(in srgb, var(--m-acc) 60%, transparent); }
-.sw[aria-checked="true"]::after { transform: translateX(20px); }
-.m-btn { font-family: var(--f-body); font-weight: 600; font-size: 13px; color: var(--m-text); background: color-mix(in srgb, var(--m-acc) 22%, transparent); border: 1px solid color-mix(in srgb, var(--m-acc) 50%, transparent); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
-.m-btn:hover { background: color-mix(in srgb, var(--m-acc) 35%, transparent); }
-.stepper { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: 14px; }
-.stepper output { min-width: 42px; text-align: center; }
-.m-row input[type="range"] { width: min(160px, 40vw); accent-color: var(--m-acc); }
-.m-row .val { font-family: var(--f-mono); font-size: 12px; width: 34px; text-align: right; color: var(--m-muted); }
-.m-ico { width: 22px; height: 22px; flex: none; }
 .themes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .theme { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: 999px; border: 1px solid var(--line); background: rgba(13, 23, 64, 0.5); color: var(--fg); cursor: pointer; font: 600 13px var(--f-body); transition: .2s; }
 .theme i { width: 18px; height: 18px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
@@ -377,6 +413,7 @@ h3 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-sp
 .menu-copy ul { margin: 0; padding-left: 18px; color: #c0cbee; display: grid; gap: 6px; }
 .pop { animation: popIn .5s cubic-bezier(.2, 1.5, .4, 1); }
 @keyframes popIn { 0% { transform: scale(.96); } 60% { transform: scale(1.015); } }
+.key .cap .mouse-i { font-size: 26px; }
 
 /* settings explorer */
 .sx-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
@@ -474,6 +511,7 @@ body.trail-on .trail { opacity: var(--o); }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
   .rv.pre { opacity: 1; transform: none; }
 }
+
 </style>
 </head>
 <body>
@@ -483,15 +521,15 @@ body.trail-on .trail { opacity: var(--o); }
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="#top"><img src="logo.png" alt="" width="34" height="34">INPUT BUFFER</a>
-    <nav class="nav-links" aria-label="Seções">
-      <a href="#como">Como funciona</a>
-      <a href="#modos">Modos</a>
-      <a href="#recursos">Recursos</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#modes">Modes</a>
+      <a href="#features">Features</a>
       <a href="#menu">Menu</a>
-      <a href="#config">Configurações</a>
+      <a href="#config">Settings</a>
       <a href="#faq">FAQ</a>
     </nav>
-    <a class="btn" href="#baixar">Baixar</a>
+    <a class="btn" href="#get">Download</a>
   </div>
 </header>
 
@@ -501,20 +539,20 @@ body.trail-on .trail { opacity: var(--o); }
       <div class="hero-grid">
         <div>
           <div class="eyebrow">
-            <span class="pill"><span class="dot"></span>v2.101.0 · build de teste</span>
+            <span class="pill"><span class="dot"></span>v3.0.0 · new menu</span>
             <span class="pill">Geometry Dash · Geode</span>
           </div>
           <h1 class="title" aria-label="Input Buffer">
             <span class="ln" aria-hidden="true" data-split>INPUT</span>
             <span class="ln ln2" aria-hidden="true" data-split data-late="0">BUFFER</span>
           </h1>
-          <p class="lead">Clicou alguns frames cedo demais? O Input Buffer <b>simula o seu pulo antes de ele acontecer</b>. Se aquele clique fosse te matar, o mod segura ele e solta no tick exato em que ele te salva.</p>
+          <p class="lead">Clicked a few frames too early? Input Buffer <b>simulates your jump before it happens</b>. If that click would kill you, the mod holds it and lets it go on the exact tick that saves you.</p>
           <div class="cta">
-            <a class="btn" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/download/teste/TESTEBUFFER.geode">
+            <a class="btn" data-dl href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/download/teste/TESTEBUFFER.geode">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
-              Baixar .geode <small>1,7 MB</small>
+              Download .geode <small data-dl-size>1.7 MB</small>
             </a>
-            <a class="btn ghost" href="#demo">Testar no navegador</a>
+            <a class="btn ghost" href="#demo">Try it in your browser</a>
           </div>
           <div class="meta"><span>GD 2.2081</span><span>Geode 5.11.2</span><span>Windows · Android · macOS</span></div>
         </div>
@@ -523,121 +561,115 @@ body.trail-on .trail { opacity: var(--o); }
 
       <div class="stage" id="demo">
         <div class="stage-top">
-          <span class="chip" id="modeChip">DEMO AUTOMÁTICA</span>
-          <div class="stats" aria-live="off">
-            <span class="s-save">Cliques salvos<b id="stSaves">0</b></span>
-            <span>Tentativa<b id="stAtt">1</b></span>
-            <span>Distância<b id="stDist">0</b></span>
-            <span>Recorde<b id="stBest">0</b></span>
+          <span class="chip" id="modeChip">AUTO DEMO</span>
+          <div class="stats">
+            <span class="s-save">Clicks saved<b id="stSaves">0</b></span>
+            <span>Attempt<b id="stAtt">1</b></span>
+            <span>Distance<b id="stDist">0</b></span>
+            <span>Best<b id="stBest">0</b></span>
           </div>
         </div>
-        <div class="play" id="play" role="application" aria-label="Demo jogável: toque ou aperte Espaço para pular">
+        <div class="play" id="play" role="application" aria-label="Playable demo: tap or press Space to jump">
           <canvas id="game"></canvas>
-          <div class="hint" id="hint">TOQUE OU APERTE ESPAÇO PARA JOGAR</div>
+          <div class="hint" id="hint">TAP OR PRESS SPACE TO PLAY</div>
           <pre class="console" id="console" aria-hidden="true"></pre>
           <div class="wm" id="wm">CBF | 8f</div>
         </div>
         <div class="toolbar">
           <div class="seg" role="group" aria-label="Buffer">
-            <button type="button" data-v="on" aria-pressed="true">Buffer ligado</button>
-            <button type="button" data-v="train" aria-pressed="false">Treino</button>
-            <button type="button" data-v="off" aria-pressed="false">Desligado</button>
+            <button type="button" data-v="on" aria-pressed="true">Buffer on</button>
+            <button type="button" data-v="train" aria-pressed="false">Training</button>
+            <button type="button" data-v="off" aria-pressed="false">Off</button>
           </div>
-          <button type="button" class="tbtn" id="bStage" title="Atraso máximo (tecla 6)">Atraso máx. <b id="stageVal">8f</b> <span class="kbd">6</span></button>
-          <button type="button" class="tbtn" id="bPath" aria-pressed="true"><span class="led"></span>Caminho <span class="kbd">F10</span></button>
-          <button type="button" class="tbtn" id="bLive" aria-pressed="false"><span class="led"></span>Caminho ao vivo</button>
+          <button type="button" class="tbtn" id="bStage" title="Stage (key 6)">Stage <b id="stageVal">8f</b> <span class="kbd">6</span></button>
+          <button type="button" class="tbtn" id="bPath" aria-pressed="true"><span class="led"></span>Path view <span class="kbd">F10</span></button>
+          <button type="button" class="tbtn" id="bLive" aria-pressed="false"><span class="led"></span>Live path</button>
           <button type="button" class="tbtn" id="bFlash" aria-pressed="true"><span class="led"></span>Flash</button>
           <button type="button" class="tbtn" id="bDing" aria-pressed="false"><span class="led"></span>Ding</button>
           <span class="tool-sep"></span>
-          <button type="button" class="tbtn" id="bDemo" hidden>Voltar à demo</button>
+          <button type="button" class="tbtn" id="bDemo" hidden>Back to demo</button>
         </div>
         <div class="legend">
-          <span><i style="color:var(--crash)"></i>o que o clique faria agora</span>
-          <span><i style="color:var(--ghost)"></i>o que o jogo recebe</span>
-          <span id="lgLive" hidden><i style="color:#6aa8ff"></i>não fazer nada · <i style="color:var(--path-y);margin-left:6px"></i>clicar agora</span>
+          <span><i style="color:var(--crash)"></i>what the click would do now</span>
+          <span><i style="color:var(--ghost)"></i>what the game gets</span>
+          <span id="lgLive" hidden><i style="color:#6aa8ff"></i>do nothing · <i style="color:var(--path-y);margin-left:6px"></i>click now</span>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="block" id="como">
+  <section class="block" id="how">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="kicker">Como funciona</span>
-        <h2>Um fantasma pula antes de você</h2>
-        <p>A cada clique o mod roda cópias invisíveis do seu ícone pela fase, tick por tick. Se o clique de agora bate em algo, ele testa o mesmo clique alguns ticks depois e usa o menor atraso que aterrissa em segurança.</p>
+        <span class="kicker">How it works</span>
+        <h2>A ghost jumps before you do</h2>
+        <p>On every click the mod runs hidden copies of your icon through the level, tick by tick. If the click you just made hits something, it tries the same click a few ticks later and uses the smallest delay that lands safely.</p>
       </div>
       <div class="diagram rv">
-        <svg viewBox="0 0 960 300" role="img" aria-label="Diagrama: o clique em t0 bate no espinho; o mesmo clique atrasado 12 ticks passa por cima.">
+        <svg viewBox="0 0 960 300" role="img" aria-label="Diagram: the click at t0 hits the spike; the same click delayed by 12 ticks clears it.">
           <defs>
             <linearGradient id="gSpike" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a2b6b"/><stop offset="1" stop-color="#0a1130"/></linearGradient>
           </defs>
           <g font-family="JetBrains Mono, monospace" font-size="12" fill="#95a3d1">
             <line x1="60" y1="250" x2="920" y2="250" stroke="#9ccfff" stroke-width="2"/>
             <g id="ruler"></g>
-            <text x="60" y="290">ticks (240 por segundo)</text>
+            <text x="60" y="290">ticks (240 per second)</text>
           </g>
-          <!-- spikes -->
           <g stroke="#bfe0ff" stroke-width="2" fill="url(#gSpike)">
             <path d="M560 250 L590 196 L620 250 Z"/>
             <path d="M620 250 L650 196 L680 250 Z"/>
             <path d="M680 250 L710 196 L740 250 Z"/>
           </g>
-          <!-- player -->
           <rect x="190" y="214" width="36" height="36" rx="3" fill="#3d8bff" stroke="#dff0ff" stroke-width="2"/>
           <rect x="200" y="224" width="16" height="16" fill="#0a1236"/>
-          <!-- click marker -->
           <g>
             <line x1="226" y1="40" x2="226" y2="250" stroke="#9ccfff" stroke-dasharray="3 5"/>
-            <text x="232" y="54" font-family="Exo 2, sans-serif" font-size="14" fill="#e9efff" font-weight="600">seu clique (t0)</text>
+            <text x="232" y="54" font-family="Exo 2, sans-serif" font-size="14" fill="#e9efff" font-weight="600">your click (t0)</text>
           </g>
-          <!-- red path -->
           <path class="draw" d="M208 230 Q 400 -10 590 214" fill="none" stroke="#ff5470" stroke-width="5" stroke-linecap="round"/>
           <circle cx="590" cy="214" r="9" fill="#ff5470"/>
-          <text x="410" y="118" font-family="Exo 2, sans-serif" font-size="14" fill="#ff8aa0" font-weight="600">pular agora: bate em t78</text>
-          <!-- delay marker -->
+          <text x="420" y="118" font-family="Exo 2, sans-serif" font-size="14" fill="#ff8aa0" font-weight="600">jump now: crash at t78</text>
           <g>
             <line x1="298" y1="70" x2="298" y2="250" stroke="#5ef0a0" stroke-dasharray="3 5"/>
             <circle cx="298" cy="232" r="7" fill="#fff"/>
-            <text x="304" y="84" font-family="Exo 2, sans-serif" font-size="14" fill="#5ef0a0" font-weight="600">solta em t12 (+3 frames)</text>
+            <text x="304" y="84" font-family="Exo 2, sans-serif" font-size="14" fill="#5ef0a0" font-weight="600">fires at t12 (+3 frames)</text>
           </g>
-          <!-- green path -->
           <path class="draw" d="M298 232 Q 540 -40 790 232" fill="none" stroke="#5ef0a0" stroke-width="5" stroke-linecap="round"/>
           <rect x="790" y="214" width="36" height="36" rx="3" fill="none" stroke="#5ef0a0" stroke-width="2" stroke-dasharray="4 4"/>
-          <text x="768" y="200" font-family="Exo 2, sans-serif" font-size="14" fill="#5ef0a0" font-weight="600">aterrissa</text>
+          <text x="776" y="200" font-family="Exo 2, sans-serif" font-size="14" fill="#5ef0a0" font-weight="600">lands</text>
         </svg>
       </div>
       <div class="steps">
-        <div class="step rv" style="--d:0ms"><span class="n">1 · VOCÊ CLICA</span><h3>Cedo demais</h3><p>O mod pega o clique antes do jogo. Nada muda na tela ainda.</p></div>
-        <div class="step rv" style="--d:90ms"><span class="n">2 · O FANTASMA PREVÊ</span><h3>Até 130 ticks à frente</h3><p>Uma cópia escondida do ícone pula agora e depois com 1, 2, 3… ticks de atraso, usando orbs, pads e portais pelo caminho.</p></div>
-        <div class="step rv" style="--d:180ms"><span class="n">3 · O JOGO RECEBE</span><h3>O clique no tick certo</h3><p>Se pular agora já era seguro, o clique passa direto. Se nenhum atraso salva, ele também passa direto.</p></div>
+        <div class="step rv" style="--d:0ms"><span class="n">1 · YOU CLICK</span><h3>Too early</h3><p>The mod catches the click before the game does. Nothing changes on screen yet.</p></div>
+        <div class="step rv" style="--d:90ms"><span class="n">2 · THE GHOST PREDICTS</span><h3>Up to 130 ticks ahead</h3><p>A hidden copy of your icon jumps now, then 1, 2, 3… ticks later, using orbs, pads and portals along the way.</p></div>
+        <div class="step rv" style="--d:180ms"><span class="n">3 · THE GAME GETS IT</span><h3>On the right tick</h3><p>If jumping now was already safe, the click goes straight through. If no delay saves you, it goes straight through too.</p></div>
       </div>
       <div class="facts rv">
-        <span class="fact"><b>4 ticks</b> = 1 frame a 60 fps</span>
-        <span class="fact">física a <b>240</b> ticks/s</span>
-        <span class="fact">atraso máx. do estágio custom: <b>40 ticks</b></span>
-        <span class="fact">orçamento por clique: <b>8 ms</b></span>
+        <span class="fact"><b>4 ticks</b> = 1 frame at 60 fps</span>
+        <span class="fact">physics at <b>240</b> ticks/s</span>
+        <span class="fact">stages from <b>0.5f</b> to <b>8f</b>, plus Custom</span>
+        <span class="fact">prediction budget: <b>8 ms</b> per click</span>
       </div>
     </div>
   </section>
 
-  <section class="block" id="modos">
+  <section class="block" id="modes">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="kicker">8 modos de jogo</span>
-        <h2>Cada modo tem a sua regra</h2>
-        <p>Um pulo de cubo não é igual a um zigue-zague de onda. O buffer decide o que é um clique "seguro" de um jeito diferente para cada forma.</p>
+        <span class="kicker">8 game modes</span>
+        <h2>Every mode plays by its own rules</h2>
+        <p>A cube jump is nothing like a wave zigzag. The buffer decides what a "safe" click is differently for each one.</p>
       </div>
       <div class="modes" id="modesGrid"></div>
     </div>
   </section>
 
-  <section class="block" id="recursos">
+  <section class="block" id="features">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="kicker">Recursos</span>
-        <h2>Mais do que segurar clique</h2>
-        <p>Previsão que entende orbs e triggers, memória por fase, ferramentas para ver o que o mod está fazendo e opções para quem sente lag.</p>
+        <span class="kicker">Features</span>
+        <h2>More than holding a click</h2>
+        <p>Prediction that understands orbs and triggers, memory per level, tools that show you what the mod is doing, and options for anyone who feels lag.</p>
       </div>
       <div class="bento">
         <article class="feat wide rv">
@@ -649,116 +681,116 @@ body.trail-on .trail { opacity: var(--o); }
             <path d="M226 66 l12 -18 l12 18z" fill="#0a1130" stroke="#bfe0ff"/>
           </svg></div>
           <h3>Path view</h3>
-          <p>Aperte F10 e veja a previsão desenhada na fase: vermelho é o que o clique faria agora, verde é o que o jogo recebe, ponto branco é onde o clique atrasado dispara. No modo ao vivo, azul é não fazer nada e amarelo é clicar agora.</p>
+          <p>Press F10 and the prediction is drawn in the level: red is what the click would do now, green is what the game gets, a white dot is where a delayed click fires. In live mode, blue is doing nothing and yellow is clicking now.</p>
           <span class="tag">show-path · F10</span>
         </article>
         <article class="feat wide rv" style="--d:80ms">
           <div class="viz"><div class="heat"><div class="fill"></div><span class="m" style="left:22%"></span><span class="m" style="left:47%;opacity:.6"></span><span class="m" style="left:48.5%"></span><span class="m" style="left:71%;opacity:.45"></span></div></div>
-          <h3>Memória de fase e mapa de mortes</h3>
-          <p>O mod lembra, por fase e por trecho, quais atrasos funcionaram e onde você morre. Atrasos que deram certo são testados primeiro, e a barra de progresso ganha marcas vermelhas onde você mais cai.</p>
-          <span class="tag">level-memory · death-heatmap · F11 esquece a fase</span>
+          <h3>Level memory and death heatmap</h3>
+          <p>The mod remembers, per level and per spot, which delays worked and where you die. Delays that worked before are tried first, and the progress bar gets red marks where you fall the most.</p>
+          <span class="tag">level-memory · death-heatmap · F11 forgets the level</span>
         </article>
         <article class="feat rv">
           <div class="viz"><div class="dots"><i style="--k:0"></i><i style="--k:1"></i><i style="--k:2"></i><i style="--k:3"></i><i style="--k:4"></i></div><div class="orb"></div></div>
-          <h3>Alinhamento de orb</h3>
-          <p>Apertou até 4 frames antes de chegar no orb? O clique espera você entrar nele e acerta.</p>
+          <h3>Orb alignment</h3>
+          <p>Pressed up to 4 frames before reaching an orb? The click waits until you're inside it, so it hits.</p>
           <span class="tag">orb-align · orb-timing</span>
         </article>
         <article class="feat rv" style="--d:60ms">
           <div class="viz"><span class="hintbox">click 0.5f early</span></div>
-          <h3>Modo treino</h3>
-          <p>O mod prevê tudo mas não atrasa nada. Só mostra quantos frames cedo você clicou, para você aprender o timing.</p>
+          <h3>Training mode</h3>
+          <p>The mod predicts everything but delays nothing. It only shows how early you clicked, so you learn the timing yourself.</p>
           <span class="tag">training-mode</span>
         </article>
         <article class="feat rv" style="--d:120ms">
-          <div class="viz"><div class="flashdemo">SALVO</div></div>
-          <h3>Flash e ding</h3>
-          <p>A tela pisca verde ou toca um ding a cada clique salvo, para você saber quando o buffer agiu.</p>
+          <div class="viz"><div class="flashdemo">SAVED</div></div>
+          <h3>Flash and ding</h3>
+          <p>The screen flashes green or a ding plays on every saved click, so you know when the buffer stepped in.</p>
           <span class="tag">save-flash · save-ding</span>
         </article>
         <article class="feat rv">
-          <h3>Prevê triggers de movimento</h3>
-          <p>Espinhos, blocos e orbs que um move ou rotate trigger vai mexer são previstos do jeito que o jogo vai mexer, com easing e duração.</p>
+          <h3>Predicts move triggers</h3>
+          <p>Spikes, blocks and orbs that a move or rotate trigger is about to move are predicted the way the game will move them, easing and duration included.</p>
           <span class="tag">predict-move-triggers</span>
         </article>
         <article class="feat rv" style="--d:60ms">
-          <h3>Auto-release e auto-click</h3>
-          <p>Na onda, no robô e no dash orb, o mod pode soltar por você quando segurar mais bateria. No treino, pode até clicar quando ficar parado mata.</p>
+          <h3>Auto-release and auto-click</h3>
+          <p>In wave, robot and dash orbs the mod can let go for you when holding longer would crash. In practice it can even click when doing nothing would kill you.</p>
           <span class="tag">wave-auto-release · auto-click</span>
         </article>
         <article class="feat rv" style="--d:120ms">
           <h3>Click Between Frames</h3>
-          <p>Com o CBF, o clique cai no meio de um tick. A previsão começa desse momento exato.</p>
+          <p>With CBF, a click lands partway through a tick. The prediction starts from that exact moment.</p>
           <span class="tag">cbf-sync</span>
         </article>
         <article class="feat rv">
-          <h3>Saves robustos</h3>
-          <p>Antes de usar um save, o mod testa ele com você meio tick à frente e atrás. Saves que só funcionam no pixel exato são trocados.</p>
+          <h3>Robust saves</h3>
+          <p>Before a save is used, it's tested with you half a tick ahead and behind. Saves that only work at the exact pixel are swapped out.</p>
           <span class="tag">robust-saves</span>
         </article>
         <article class="feat rv" style="--d:60ms">
-          <h3>Baixa latência e desempenho</h3>
-          <p>Sente o buffer como lag? Limite o atraso a 1 frame. PC caindo de FPS ao clicar? Cada clique fica com no máximo 4 ms.</p>
+          <h3>Low latency and performance</h3>
+          <p>Feel the buffer as lag? Cap delays at 1 frame. FPS dropping when you click? Each click gets at most 4 ms.</p>
           <span class="tag">low-latency · performance-mode · auto-budget</span>
         </article>
         <article class="feat rv" style="--d:120ms">
-          <h3>Planeja dois cliques</h3>
-          <p>Quando a batida vem de algo que o seu próximo clique resolveria, depois de um orb ou de um portal, o fantasma tenta mais um clique.</p>
+          <h3>Plans two clicks ahead</h3>
+          <p>When a crash comes from something your next click would handle, after an orb or a portal, the ghost tries one more click.</p>
           <span class="tag">plan-next-click · predict-through-portals</span>
         </article>
       </div>
     </div>
   </section>
 
-  <section class="block" id="teclas">
+  <section class="block" id="keys">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="kicker">Atalhos</span>
-        <h2>Tudo no teclado</h2>
-        <p>Teclas padrão dentro de uma fase. Dá para trocar nas configurações do mod ou no popup de keybinds do Geode. Aqui no site, 6, 7, F8, F9 e F10 também funcionam na demo.</p>
+        <span class="kicker">Shortcuts</span>
+        <h2>All on the keyboard</h2>
+        <p>Default keys inside a level. Change them in the mod settings or in Geode's keybinds popup. On this page, 6, 7, Right Shift, F8, F9 and F10 also drive the demo.</p>
       </div>
-      <div class="keys" id="keys">
-        <button type="button" class="key rv" data-k="6"><span class="cap">6</span><b>Trocar estágio</b><span>Muda o atraso máximo do buffer.</span></button>
-        <button type="button" class="key rv" data-k="7" style="--d:50ms"><span class="cap">7</span><b>Abrir o menu</b><span>Janela com as abas Buffer, Prediction, Modes, Custom e Tools.</span></button>
-        <button type="button" class="key rv" data-k="RS" style="--d:100ms"><span class="cap">R Shift</span><b>Menu também</b><span>Abre e fecha o menu na fase e no menu principal.</span></button>
-        <button type="button" class="key rv" data-k="F8" style="--d:150ms"><span class="cap">F8</span><b>Copiar o log</b><span>Copia o console para a área de transferência.</span></button>
-        <button type="button" class="key rv" data-k="F9" style="--d:200ms"><span class="cap">F9</span><b>Console</b><span>Mostra ou esconde o console dentro do jogo.</span></button>
-        <button type="button" class="key rv" data-k="F10" style="--d:250ms"><span class="cap">F10</span><b>Path view</b><span>Desenha a previsão na fase.</span></button>
-        <button type="button" class="key rv" data-k="F11" style="--d:300ms"><span class="cap">F11</span><b>Esquecer a fase</b><span>Apaga a memória desta fase.</span></button>
+      <div class="keys" id="keysGrid">
+        <button type="button" class="key rv" data-k="6"><span class="cap">6</span><b>Change stage</b><span>Steps through the max delay.</span></button>
+        <button type="button" class="key rv" data-k="7" style="--d:50ms"><span class="cap">7</span><b>Open the menu</b><span>Buffer, Prediction, Modes, Frames and Tools.</span></button>
+        <button type="button" class="key rv" data-k="RS" style="--d:100ms"><span class="cap">R Shift</span><b>Menu too</b><span>Opens and closes the menu in a level and on the main menu.</span></button>
+        <button type="button" class="key rv" data-k="MB" style="--d:150ms"><span class="cap"><span class="mouse-i"></span></span><b>Mouse button</b><span>On the main and pause menus. This is how phones open it.</span></button>
+        <button type="button" class="key rv" data-k="F8" style="--d:200ms"><span class="cap">F8</span><b>Copy the log</b><span>Copies the console to the clipboard.</span></button>
+        <button type="button" class="key rv" data-k="F9" style="--d:250ms"><span class="cap">F9</span><b>Console</b><span>Shows or hides the in-game console.</span></button>
+        <button type="button" class="key rv" data-k="F10" style="--d:300ms"><span class="cap">F10</span><b>Path view</b><span>Draws the prediction in the level.</span></button>
+        <button type="button" class="key rv" data-k="F11" style="--d:350ms"><span class="cap">F11</span><b>Forget level</b><span>Clears this level's memory.</span></button>
       </div>
     </div>
   </section>
 
   <section class="block" id="menu">
     <div class="wrap menu-grid">
-      <div class="menu rv" id="mMenu" data-mt="purple">
-        <div class="stars"></div><div class="shoot"></div>
-        <div class="m-head"><img src="logo.png" alt=""><b>Input Buffer</b><span class="x" aria-hidden="true">×</span></div>
-        <div class="m-tabs" role="tablist" aria-label="Abas do menu">
-          <button role="tab" aria-selected="true" data-tab="buffer">Buffer</button>
-          <button role="tab" aria-selected="false" data-tab="prediction">Prediction</button>
-          <button role="tab" aria-selected="false" data-tab="modes">Modes</button>
-          <button role="tab" aria-selected="false" data-tab="custom">Custom</button>
-          <button role="tab" aria-selected="false" data-tab="tools">Tools</button>
+      <div class="menu rv" id="mMenu" data-mt="blue">
+        <div class="m-head" id="mHead">
+          <span class="m-logo"><span class="mouse-i"></span></span>
+          <span class="m-title"><b>Input Buffer</b><small>v3.0.0</small></span>
+          <span class="m-right"><span class="m-saves"><b id="mSaves">0</b> saves</span><span class="m-pill" id="mPill">ON</span></span>
         </div>
-        <div class="m-body" id="mBody" role="tabpanel"></div>
+        <div class="m-wrap">
+          <div class="m-side" role="tablist" aria-label="Menu tabs" id="mSide"></div>
+          <div class="m-page" id="mPage" role="tabpanel"></div>
+        </div>
       </div>
       <div class="menu-copy rv" style="--d:100ms">
         <div class="sec-head" style="margin-bottom:18px">
-          <span class="kicker">O menu dentro do jogo</span>
-          <h2>Um céu cheio de estrelas e todos os botões</h2>
+          <span class="kicker">New in v3.0</span>
+          <h2>The in-game menu, rebuilt</h2>
         </div>
-        <p>Abra com 7, Right Shift ou o coração no menu de pausa (é assim que se abre no celular). A janela arrasta, tem cinco temas e fontes Orbitron e Exo 2.</p>
+        <p>A clean dark window with a live ON/OFF status, tabs on the side and tiles you tap anywhere to switch. Drag it by the header. Open it with 7, Right Shift or the mouse button on the main and pause menus.</p>
         <ul>
-          <li>Os interruptores aqui ao lado funcionam. Path view, Flash e Ding controlam a demo lá em cima.</li>
-          <li>Na aba Custom, cada modo de jogo tem o seu próprio limite de frames.</li>
+          <li>This copy works. Stage chips, presets, Path view, Training, Low latency, Flash, Ding and Remove watermark all control the demo above.</li>
+          <li>On the Frames tab every game mode gets its own limit, in half-frame steps up to 10 frames.</li>
         </ul>
-        <div class="themes" id="themes" role="group" aria-label="Tema do menu">
-          <button type="button" class="theme" data-t="purple" aria-pressed="true" style="--c:#a477ff"><i></i>Purple</button>
-          <button type="button" class="theme" data-t="pink" aria-pressed="false" style="--c:#ff7ac8"><i></i>Pink</button>
-          <button type="button" class="theme" data-t="blue" aria-pressed="false" style="--c:#4aa3ff"><i></i>Blue</button>
-          <button type="button" class="theme" data-t="green" aria-pressed="false" style="--c:#55e39a"><i></i>Green</button>
-          <button type="button" class="theme" data-t="dark" aria-pressed="false" style="--c:#c9d2e8"><i></i>Dark</button>
+        <div class="themes" id="themes" role="group" aria-label="Menu theme">
+          <button type="button" class="theme" data-t="blue" aria-pressed="true" style="--c:#3e98ff"><i></i>Blue</button>
+          <button type="button" class="theme" data-t="purple" aria-pressed="false" style="--c:#926cff"><i></i>Purple</button>
+          <button type="button" class="theme" data-t="pink" aria-pressed="false" style="--c:#ff62b0"><i></i>Pink</button>
+          <button type="button" class="theme" data-t="green" aria-pressed="false" style="--c:#34cd7c"><i></i>Green</button>
+          <button type="button" class="theme" data-t="dark" aria-pressed="false" style="--c:#7a8294"><i></i>Dark</button>
         </div>
       </div>
     </div>
@@ -768,58 +800,57 @@ body.trail-on .trail { opacity: var(--o); }
     <div class="wrap">
       <div class="sec-head rv">
         <span class="kicker">mod.json</span>
-        <h2>Todas as <span id="sxTotal">68</span> configurações</h2>
-        <p>Nomes e descrições como aparecem no Geode. Procure por nome, id ou palavra da descrição.</p>
+        <h2>All <span id="sxTotal">68</span> settings</h2>
+        <p>Names and descriptions exactly as Geode shows them. Search by name, id or any word in the description.</p>
       </div>
       <div class="sx-bar">
-        <input id="sxQ" type="search" placeholder="Procurar: wave, orb, ticks, memory…" aria-label="Procurar configuração" autocomplete="off">
-        <div class="fchips" id="sxF" role="group" aria-label="Filtrar por tipo">
-          <button type="button" data-f="all" aria-pressed="true">Todas</button>
-          <button type="button" data-f="bool" aria-pressed="false">Liga/desliga</button>
-          <button type="button" data-f="num" aria-pressed="false">Números</button>
-          <button type="button" data-f="keybind" aria-pressed="false">Teclas</button>
+        <input id="sxQ" type="search" placeholder="Search: wave, orb, ticks, memory…" aria-label="Search settings" autocomplete="off">
+        <div class="fchips" id="sxF" role="group" aria-label="Filter by type">
+          <button type="button" data-f="all" aria-pressed="true">All</button>
+          <button type="button" data-f="bool" aria-pressed="false">Toggles</button>
+          <button type="button" data-f="num" aria-pressed="false">Numbers</button>
+          <button type="button" data-f="keybind" aria-pressed="false">Keys</button>
           <button type="button" data-f="debug" aria-pressed="false">Debug</button>
         </div>
         <span class="sx-count" id="sxCount"></span>
       </div>
       <div class="sx-list" id="sxList"></div>
-      <div class="sx-more"><button type="button" class="btn ghost" id="sxMore">Mostrar todas</button></div>
+      <div class="sx-more"><button type="button" class="btn ghost" id="sxMore">Show all</button></div>
     </div>
   </section>
 
-  <section class="block" id="baixar">
+  <section class="block" id="get">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="kicker">Instalação</span>
-        <h2>Pronto em um minuto</h2>
+        <span class="kicker">Install</span>
+        <h2>Ready in a minute</h2>
       </div>
       <div class="install">
         <ol class="inst rv">
-          <li><div><b>Instale o Geode</b><p>O Input Buffer é um mod do Geode. Pegue o instalador em <a href="https://geode-sdk.org" rel="noopener">geode-sdk.org</a> (no Android, o Geode Launcher).</p></div></li>
-          <li><div><b>Baixe o TESTEBUFFER.geode</b><p>É um arquivo só, com as builds de Windows, Android 32/64 e macOS juntas.</p></div></li>
-          <li><div><b>Coloque na pasta de mods</b><p>No PC: <code class="path">pasta do Geometry Dash/geode/mods</code>. No Android: <code class="path">Android/media/com.geode.launcher/game/geode/mods</code>.</p></div></li>
-          <li><div><b>Abra uma fase</b><p>Aperte 6 para escolher o estágio e 7 para abrir o menu. No celular, use o coração roxo no menu de pausa.</p></div></li>
+          <li><div><b>Install Geode</b><p>Input Buffer is a Geode mod. Get the installer at <a href="https://geode-sdk.org" rel="noopener">geode-sdk.org</a> (on Android, the Geode Launcher).</p></div></li>
+          <li><div><b>Download the .geode</b><p>One file with the Windows, Android 32/64-bit and macOS builds inside.</p></div></li>
+          <li><div><b>Drop it in the mods folder</b><p>On PC: <code class="path">Geometry Dash folder/geode/mods</code>. Delete older copies first (<code class="path">basu.input-buffer.geode</code> or an old <code class="path">TESTEBUFFER.geode</code>), or both run at once. Your settings and level memory move over from the old ID by themselves.</p></div></li>
+          <li><div><b>Open a level</b><p>Press 6 to pick a stage and 7 to open the menu. On a phone, tap the mouse button on the pause menu.</p></div></li>
         </ol>
         <div class="rv" style="--d:100ms;display:grid;gap:14px">
           <div class="dl">
-            <div class="file"><img src="logo.png" alt=""><div><b>TESTEBUFFER.geode</b><small>pré-lançamento "teste" · 1.740.691 bytes</small></div></div>
+            <div class="file"><img src="logo.png" alt=""><div><b id="dlName">TESTEBUFFER.geode</b><small id="dlSub">test build · 1,712,450 bytes</small></div></div>
             <dl class="kv">
-              <dt>Versão</dt><dd>v2.101.0</dd>
-              <dt>ID</dt><dd>basu.input-buffer</dd>
-              <dt>Dev</dt><dd>timbodev</dd>
-              <dt>Commit</dt><dd>25122ab</dd>
-              <dt>Jogo</dt><dd>GD 2.2081 · Geode 5.11.2</dd>
+              <dt>Version</dt><dd>v3.0.0</dd>
+              <dt>ID</dt><dd>timbodev.input-buffer</dd>
+              <dt>Developer</dt><dd>timbodev</dd>
+              <dt>Game</dt><dd>GD 2.2081 · Geode 5.11.2</dd>
             </dl>
-            <div class="sha"><code id="sha">sha256:0d1c896487b25039944e3e74bf12f219c346e4dfcd66fd28a7ff4d3ddd89f7bd</code><button type="button" class="copy" id="copySha">Copiar</button></div>
+            <div class="sha"><code id="sha">sha256:790934c32a4e16d4b5b4f7dbf30dee2180c7ee99fef92b10e2b3bf7450fbfc71</code><button type="button" class="copy" id="copySha">Copy</button></div>
             <div class="cta">
-              <a class="btn" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/download/teste/TESTEBUFFER.geode">
+              <a class="btn" data-dl href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/download/teste/TESTEBUFFER.geode">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
-                Baixar
+                Download
               </a>
-              <a class="btn ghost" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/tag/teste">Página da release</a>
+              <a class="btn ghost" id="dlPage" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases">All releases</a>
             </div>
           </div>
-          <div class="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span>Feito para treinar. Não use em runs verificadas nem de leaderboard. TPS diferente de 240 também muda a física e não vale como completion legítima.</span></div>
+          <div class="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span>Made for practice. Don't use it for verified or leaderboard runs. Any physics TPS other than 240 also changes the game's physics and isn't a legit completion.</span></div>
         </div>
       </div>
     </div>
@@ -829,26 +860,26 @@ body.trail-on .trail { opacity: var(--o); }
     <div class="wrap">
       <div class="sec-head rv">
         <span class="kicker">Changelog</span>
-        <h2>Mais de cem versões</h2>
-        <p>Alguns marcos, do mais novo para o mais antigo. A lista completa está no README do repositório.</p>
+        <h2>Over a hundred versions</h2>
+        <p>Some milestones, newest first. The full list is in the repository README.</p>
       </div>
       <ul class="log rv">
-        <li><span class="v">v2.101</span><p>Agora se chama Input Buffer (dev timbodev). Nova opção "Flash when save": a tela pisca verde a cada save.</p></li>
-        <li><span class="v">v2.100</span><p>Opção para esconder os botões de coração. Right Shift abre e fecha o menu.</p></li>
-        <li><span class="v">v2.99</span><p>Opção para tirar a marca d'água "CBF | estágio".</p></li>
-        <li><span class="v">v2.94</span><p>Botão do menu de volta no pause, para abrir no celular dentro da fase.</p></li>
-        <li><span class="v">v2.92</span><p>Menu novo: janela arrastável com abas, tema espacial com estrelas cadentes e frames por modo na aba Custom.</p></li>
-        <li><span class="v">v2.83</span><p>Builds para macOS.</p></li>
-        <li><span class="v">v2.82</span><p>Suporte a Android 32 e 64 bits, com botão de Console no menu.</p></li>
-        <li><span class="v">v2.80</span><p>Configuração de TPS da física, de 240 a 1000.</p></li>
-        <li><span class="v">v2.79</span><p>Auto-click e previsões que atravessam portais de modo.</p></li>
-        <li><span class="v">v2.75</span><p>Run check, presets Safe / Balanced / Aggressive e teclas configuráveis.</p></li>
-        <li><span class="v">v2.65</span><p>Path view ao vivo: azul é não fazer nada, amarelo é clicar agora.</p></li>
-        <li><span class="v">v2.51</span><p>Modo treino, configurações por fase, mapa de mortes e swing inteligente.</p></li>
-        <li><span class="v">v2.44</span><p>Primeiro menu dentro do jogo. A nave ganha atraso próprio.</p></li>
-        <li><span class="v">v2.35</span><p>Sincronia com Click Between Frames e modo de baixa latência.</p></li>
-        <li><span class="v">v2.13</span><p>Memória de fase: o mod aprende com as suas runs.</p></li>
-        <li><span class="v">v2.6</span><p>Alinhamento de orb.</p></li>
+        <li><span class="v">v3.0</span><p>New menu built from scratch: dark window, mouse icon, live ON/OFF status, sidebar tabs, stage chips, presets, Frames tab and a session saves counter. Mouse button replaces the heart. New ID timbodev.input-buffer, with your settings moved over.</p></li>
+        <li><span class="v">v2.101</span><p>Renamed to Input Buffer (developer timbodev). New "Flash when save" option.</p></li>
+        <li><span class="v">v2.100</span><p>Option to hide the menu buttons. Right Shift opens and closes the menu.</p></li>
+        <li><span class="v">v2.99</span><p>Option to remove the "CBF | stage" watermark.</p></li>
+        <li><span class="v">v2.94</span><p>The pause menu gets a menu button again, so phones can open it inside a level.</p></li>
+        <li><span class="v">v2.92</span><p>A draggable menu window with tabs, and per-mode frames.</p></li>
+        <li><span class="v">v2.83</span><p>macOS builds.</p></li>
+        <li><span class="v">v2.82</span><p>Android support (32 and 64-bit), with a Console button in the menu.</p></li>
+        <li><span class="v">v2.80</span><p>Physics TPS setting, from 240 to 1000.</p></li>
+        <li><span class="v">v2.79</span><p>Auto-click, and predictions that go through mode portals.</p></li>
+        <li><span class="v">v2.75</span><p>Run check, Safe / Balanced / Aggressive presets and rebindable keys.</p></li>
+        <li><span class="v">v2.65</span><p>Live path view: blue is doing nothing, yellow is clicking now.</p></li>
+        <li><span class="v">v2.51</span><p>Training mode, per-level settings, death heatmap and smart swing.</p></li>
+        <li><span class="v">v2.35</span><p>Click Between Frames sync and low latency mode.</p></li>
+        <li><span class="v">v2.13</span><p>Level memory: the mod learns from your runs.</p></li>
+        <li><span class="v">v2.6</span><p>Orb alignment.</p></li>
       </ul>
     </div>
   </section>
@@ -856,16 +887,17 @@ body.trail-on .trail { opacity: var(--o); }
   <section class="block" id="faq">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="kicker">Perguntas</span>
-        <h2>Antes de instalar</h2>
+        <span class="kicker">Questions</span>
+        <h2>Before you install</h2>
       </div>
       <div class="faq rv">
-        <details open><summary>O mod joga por mim?</summary><p>Não. Ele só mexe nos cliques que você já fez: segura um clique feito cedo até o tick em que ele funciona. Se você não clicar, nada acontece. As exceções são auto-release e auto-click, que vêm desligados e, por padrão, só agem no modo prática.</p></details>
-        <details><summary>Posso usar em runs que vou mandar para a leaderboard?</summary><p>Não. O mod é para treino. Fora do modo prática aparece a marca d'água "CBF | estágio" enquanto o buffer está ligado, e qualquer TPS diferente de 240 muda a física do jogo.</p></details>
-        <details><summary>Funciona no celular?</summary><p>Sim, no Android (32 e 64 bits). Como não tem teclado, abra o menu pelo coração roxo no menu de pausa; o console tem um botão no próprio menu. iOS ainda não tem build.</p></details>
-        <details><summary>Funciona junto com o Click Between Frames?</summary><p>Sim. Com a opção "Click Between Frames sync", a previsão começa do ponto exato dentro do tick em que o clique caiu.</p></details>
-        <details><summary>Meu FPS cai quando eu clico. E agora?</summary><p>Ligue o modo desempenho: cada clique fica com no máximo 4 ms de previsão. O "Auto time budget" já faz isso sozinho quando o jogo está perdendo frames.</p></details>
-        <details><summary>Os cliques parecem atrasados.</summary><p>Ligue o modo de baixa latência (atraso de no máximo 1 frame) ou diminua o estágio com a tecla 6. Para aprender o timing sem atraso nenhum, use o modo treino.</p></details>
+        <details open><summary>Does the mod play for me?</summary><p>No. It only moves clicks you already made: an early click is held until the tick where it works. If you don't click, nothing happens. The exceptions are auto-release and auto-click, which are off by default and only act in practice mode unless you allow them in normal runs.</p></details>
+        <details><summary>Can I use it for leaderboard runs?</summary><p>No. It's a practice tool. Outside practice mode the "CBF | stage" watermark shows while the buffer is on, and any TPS other than 240 changes the game's physics.</p></details>
+        <details><summary>Does it work on phones?</summary><p>Yes, on Android (32 and 64-bit). With no keyboard, open the menu with the mouse button on the pause menu; the console has its own button in the Tools tab. There's no iOS build yet.</p></details>
+        <details><summary>Does it work with Click Between Frames?</summary><p>Yes. With "Click Between Frames sync" on, the prediction starts from the exact point inside the tick where your click landed.</p></details>
+        <details><summary>My FPS drops when I click.</summary><p>Turn on Performance mode: each click gets at most 4 ms of prediction. "Auto time budget" already does this by itself while the game is dropping frames.</p></details>
+        <details><summary>Clicks feel late.</summary><p>Turn on Low latency (delays capped at 1 frame) or lower the stage with key 6. To learn the timing with no delay at all, use Training mode.</p></details>
+        <details><summary>I had the old version installed.</summary><p>v3.0 has a new ID (timbodev.input-buffer). Delete the old .geode file so both don't run together. Your settings, stage, per-mode frames and level memory are copied from the old ID the first time.</p></details>
       </div>
     </div>
   </section>
@@ -874,7 +906,7 @@ body.trail-on .trail { opacity: var(--o); }
 <footer>
   <div class="wrap foot">
     <a class="brand" href="#top"><img src="logo.png" alt="" width="34" height="34">INPUT BUFFER</a>
-    <span>Mod por timbodev · <a href="https://github.com/porqueijjmzm1/Click-After-Frames">código no GitHub</a> · Não é afiliado à RobTop Games.</span>
+    <span>By timbodev, based on Click Before Frames by BASU · <a href="https://github.com/porqueijjmzm1/Click-After-Frames">Source on GitHub</a> · Not affiliated with RobTop Games.</span>
   </div>
 </footer>
 
@@ -1018,10 +1050,8 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200);
 }
 function copyText(text, okMsg) {
-  const done = () => toast(okMsg);
-  try {
-    navigator.clipboard.writeText(text).then(done, () => toast('Não deu para copiar aqui. Selecione o texto e copie.'));
-  } catch (e) { toast('Não deu para copiar aqui. Selecione o texto e copie.'); }
+  const fail = () => toast("Couldn't copy here. Select the text and copy it.");
+  try { navigator.clipboard.writeText(text).then(() => toast(okMsg), fail); } catch (e) { fail(); }
 }
 
 /* ---------- hero title split ---------- */
@@ -1113,18 +1143,22 @@ $$('.feat').forEach(el => el.addEventListener('pointermove', e => {
 /* ======================================================================
    Playable demo
    ====================================================================== */
+// The mod's stages (key 6), in ticks; Custom = the custom-ticks default (40), Off = no buffer.
+const STAGES = [2, 4, 8, 16, 24, 32, 40, 0];
+const STAGE_NAMES = ['0.5f', '1f', '2f', '4f', '6f', '8f', 'Custom', 'Off'];
+
 const Game = (() => {
   const play = $('#play'), cv = $('#game'), cx = cv.getContext('2d');
-  const STAGES = [16, 24, 32, 40];
-  const st = { mode: 'bot', buffer: 'on', path: true, live: false, flash: true, ding: false, console: true, stage: 2 };
-  let L, p, T, sched, held, plan, botRel, curDelay, pendingDown, paths, live, parts, floats, flash, flashCol, shake, deadAt, rot, rotV, lastInput;
+  const st = { mode: 'bot', buffer: 'on', path: true, live: false, flash: true, ding: false, console: true, stage: 5, lowLat: false, wm: true };
+  let L, p, T, sched, held, plan, botRel, curDelay, pendingDown, paths, live, parts, floats, flash, flashCol, shake, deadAt, rot, lastInput;
   let saves = 0, attempts = 1, best = 0;
   let inq = [];
   const logLines = [];
   let cw = 0, ch = 0, dpr = 1, k = 1, gy = 0, bgGrad, groundGrad;
   let visible = true, ignoreUp = false, audioCtx = null;
 
-  const fr = d => (d / 4).toFixed(1).replace('.', ',');
+  const fr = d => (d / 4).toFixed(1);
+  function maxDelay() { const m = STAGES[st.stage]; return st.lowLat ? Math.min(m, 4) : m; }
   function log(html) {
     logLines.push({ t: T, html });
     if (logLines.length > 80) logLines.shift();
@@ -1133,12 +1167,12 @@ const Game = (() => {
   function drawConsole() {
     const el = $('#console');
     el.hidden = !st.console;
-    el.innerHTML = logLines.slice(innerWidth < 560 ? -2 : -4).map(l => '[t' + l.t + '] ' + l.html).join('\n') || '[t0] buffer pronto';
+    el.innerHTML = logLines.slice(innerWidth < 560 ? -2 : -4).map(l => '[t' + l.t + '] ' + l.html).join('\n') || '[t0] buffer ready';
   }
   function reset() {
     L = makeLevel((Math.random() * 1e9) | 0);
     p = newPlayer(); T = 0; sched = []; held = false; plan = -1; botRel = -1; curDelay = 0; pendingDown = -1;
-    paths = []; live = null; parts = []; floats = []; flash = 0; shake = 0; deadAt = 0; rot = 0; rotV = 0; inq = [];
+    paths = []; live = null; parts = []; floats = []; flash = 0; shake = 0; deadAt = 0; rot = 0; inq = [];
   }
 
   function ding() {
@@ -1154,25 +1188,27 @@ const Game = (() => {
   function press() {
     if (pendingDown > T) return;
     let d = 0;
-    if (st.buffer !== 'off') {
-      const r = decide(p, STAGES[st.stage], L.obs, st.path);
+    const md = maxDelay();
+    if (st.buffer !== 'off' && md > 0) {
+      const r = decide(p, md, L.obs, st.path);
       if (r.kind === 'save') {
         if (st.buffer === 'on') {
           d = r.d; saves++;
-          log('<span class="ok">clique salvo: +' + d + 't (' + fr(d) + 'f)</span>');
+          log('<span class="ok">click saved: +' + d + 't (' + fr(d) + 'f)</span>');
           floats.push({ x: p.x + PW / 2, y: p.y + PW + 10, txt: '+' + fr(d) + 'f', life: 1, col: '#5ef0a0' });
           if (st.flash) { flash = 1; flashCol = '94,240,160'; }
           if (st.ding) ding();
           if (st.path) paths.push({ now: r.nowPts, chosen: r.chosen, fire: [p.x + d * SPEED, p.y], born: performance.now() });
+          document.dispatchEvent(new CustomEvent('game-save', { detail: saves }));
         } else {
-          log('<span class="mid">treino: clique ' + fr(r.d) + 'f cedo</span>');
-          floats.push({ x: p.x + PW / 2, y: p.y + PW + 10, txt: fr(r.d) + 'f cedo', life: 1, col: '#ffd65a' });
+          log('<span class="mid">training: click ' + fr(r.d) + 'f early</span>');
+          floats.push({ x: p.x + PW / 2, y: p.y + PW + 10, txt: fr(r.d) + 'f early', life: 1, col: '#ffd65a' });
           if (st.path) paths.push({ now: r.nowPts, chosen: null, born: performance.now() });
         }
       } else if (r.kind === 'safe') {
-        log('clique seguro, passa direto');
+        log('safe as it is, straight through');
       } else if (r.kind === 'nosave') {
-        log('<span class="bad">sem save: bate em ' + r.crash + 't</span>');
+        log('<span class="bad">no save: crash in ' + r.crash + 't</span>');
         if (st.path) paths.push({ now: r.nowPts, chosen: null, born: performance.now() });
       }
     }
@@ -1229,7 +1265,7 @@ const Game = (() => {
     burst(p.x + PW / 2, p.y + PW / 2, 34, '255,84,112', 3.2, 0.9);
     burst(p.x + PW / 2, p.y + PW / 2, 16, '156,207,255', 2.2, 0.7);
     shake = 14; flash = 0.8; flashCol = '255,84,112';
-    log('<span class="bad">morreu em ' + Math.floor(p.x / B) + ' blocos</span>');
+    log('<span class="bad">died at ' + Math.floor(p.x / B) + ' blocks</span>');
   }
 
   function resize() {
@@ -1262,7 +1298,6 @@ const Game = (() => {
     const lead = Math.min(cw * 0.26, 6 * B * k);
     const camX = p.x - lead / k;
 
-    // parallax background squares
     const S = B * k * 2.4, par = (camX * 0.2 * k) % S;
     cx.lineWidth = 1;
     for (let i = -1; i < cw / S + 2; i++) {
@@ -1276,7 +1311,6 @@ const Game = (() => {
       }
     }
 
-    // ground
     cx.fillStyle = groundGrad; cx.fillRect(0, gy, cw, ch - gy);
     cx.strokeStyle = 'rgba(156,207,255,0.08)';
     const gs = B * k * 2, goff = (camX * k) % gs;
@@ -1286,7 +1320,6 @@ const Game = (() => {
     cx.save(); cx.shadowColor = '#3d8bff'; cx.shadowBlur = 14; cx.strokeStyle = lg; cx.lineWidth = 2;
     cx.beginPath(); cx.moveTo(0, gy); cx.lineTo(cw, gy); cx.stroke(); cx.restore();
 
-    // obstacles
     const obs = L.obs, bk = B * k;
     cx.save(); cx.shadowColor = 'rgba(61,139,255,0.9)'; cx.shadowBlur = 10; cx.lineJoin = 'round';
     for (let i = lowerBound(obs, camX - B); i < obs.length; i++) {
@@ -1306,7 +1339,6 @@ const Game = (() => {
     }
     cx.restore();
 
-    // predicted paths
     if (st.live && live) { dotsPath(live.idle, camX, '106,168,255', 0.55, 2); dotsPath(live.now, camX, '255,214,90', 0.7, 2); }
     paths = paths.filter(pp => now - pp.born < 1800);
     for (const pp of paths) {
@@ -1324,7 +1356,6 @@ const Game = (() => {
       }
     }
 
-    // player
     if (!p.dead) {
       const s = PW * k, X = (p.x - camX) * k, Y = gy - p.y * k - s;
       cx.save(); cx.translate(X + s / 2, Y + s / 2); cx.rotate(rot);
@@ -1339,7 +1370,6 @@ const Game = (() => {
       cx.restore();
     }
 
-    // particles
     for (const q of parts) {
       q.life -= dt; q.x += q.vx * dt * 60; q.y += q.vy * dt * 60; q.vy -= 0.12 * dt * 60;
       const a = Math.max(0, q.life / q.max);
@@ -1349,7 +1379,6 @@ const Game = (() => {
     }
     parts = parts.filter(q => q.life > 0);
 
-    // floating labels
     cx.textAlign = 'center'; cx.font = '900 ' + Math.max(13, Math.round(k * 15)) + 'px Orbitron, sans-serif';
     for (const f of floats) {
       f.life -= dt * 0.9; f.y += dt * 60;
@@ -1374,9 +1403,7 @@ const Game = (() => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (visible && !document.hidden) {
       if (!p.dead) { acc += dt * TPS; let n = 0; while (acc >= 1 && n < 60) { tick(); acc -= 1; n++; } if (n >= 60) acc = 0; }
-      else if (now - deadAt > 750) {
-        best = Math.max(best, Math.floor(p.x / B)); attempts++; reset();
-      }
+      else if (now - deadAt > 750) { best = Math.max(best, Math.floor(p.x / B)); attempts++; reset(); }
       draw(now, dt);
       if (now - statT > 150) {
         statT = now;
@@ -1391,11 +1418,12 @@ const Game = (() => {
   function setMode(m) {
     st.mode = m; saves = 0; attempts = 1; best = 0; reset();
     const chip = $('#modeChip');
-    chip.textContent = m === 'bot' ? 'DEMO AUTOMÁTICA' : 'VOCÊ ESTÁ JOGANDO';
+    chip.textContent = m === 'bot' ? 'AUTO DEMO' : "YOU'RE PLAYING";
     chip.classList.toggle('you', m === 'player');
     $('#hint').hidden = m !== 'bot';
     $('#bDemo').hidden = m === 'bot';
-    log(m === 'bot' ? 'demo: o bot clica cedo de propósito' : 'sua vez: clique cedo e veja o buffer agir');
+    document.dispatchEvent(new CustomEvent('game-save', { detail: 0 }));
+    log(m === 'bot' ? 'demo: the bot clicks early on purpose' : 'your turn: click early and watch the buffer');
   }
   function down() {
     lastInput = performance.now();
@@ -1422,23 +1450,34 @@ const Game = (() => {
     $('#bFlash').setAttribute('aria-pressed', String(st.flash));
     $('#bDing').setAttribute('aria-pressed', String(st.ding));
     $('#lgLive').hidden = !st.live;
-    const f = STAGES[st.stage] / 4 + 'f';
-    $('#stageVal').textContent = f; $('#wm').textContent = 'CBF | ' + f;
+    const name = STAGE_NAMES[st.stage];
+    $('#stageVal').textContent = name;
+    $('#wm').textContent = 'CBF | ' + name;
+    $('#wm').hidden = !st.wm;
     document.dispatchEvent(new CustomEvent('game-sync', { detail: st }));
   };
-  $$('.seg button').forEach(b => b.addEventListener('click', () => {
-    st.buffer = b.dataset.v; sync();
-    log(st.buffer === 'on' ? 'buffer ligado' : st.buffer === 'train' ? 'modo treino: só dicas, sem atraso' : '<span class="bad">buffer desligado</span>');
-  }));
+  $$('.seg button').forEach(b => b.addEventListener('click', () => api.setBuffer(b.dataset.v)));
   const api = {
     st,
-    setStage(i) { st.stage = i; sync(); log('estágio: atraso máx. ' + STAGES[i] + 't (' + STAGES[i] / 4 + 'f)'); },
+    get saves() { return saves; },
+    setBuffer(v) {
+      st.buffer = v; sync();
+      log(v === 'on' ? 'buffer on' : v === 'train' ? 'training: hints only, no delays' : '<span class="bad">buffer off</span>');
+    },
+    setStage(i) {
+      st.stage = i; sync();
+      log(STAGES[i] ? 'stage ' + STAGE_NAMES[i] + ': max delay ' + STAGES[i] + 't' : '<span class="bad">stage Off: clicks go straight through</span>');
+    },
     cycleStage() { api.setStage((st.stage + 1) % STAGES.length); },
-    set(key, v) { st[key] = v; if (key === 'live' && !v) live = null; sync(); },
+    set(key, v) {
+      st[key] = v; if (key === 'live' && !v) live = null; sync();
+      if (key === 'lowLat') log(v ? 'low latency: delays capped at 1 frame' : 'low latency off');
+    },
     toggle(key) { api.set(key, !st[key]); },
     toggleConsole() { st.console = !st.console; drawConsole(); },
-    copyLog() { copyText(logLines.map(l => '[t' + l.t + '] ' + l.html.replace(/<[^>]+>/g, '')).join('\n') || '(log vazio)', 'Log da demo copiado'); },
-    forget() { saves = 0; attempts = 1; best = 0; reset(); log('memória da fase apagada'); },
+    copyLog() { copyText(logLines.map(l => '[t' + l.t + '] ' + l.html.replace(/<[^>]+>/g, '')).join('\n') || '(empty log)', 'Demo log copied'); },
+    forget() { saves = 0; attempts = 1; best = 0; reset(); log('level memory cleared'); document.dispatchEvent(new CustomEvent('game-save', { detail: 0 })); },
+    stats() { return saves + ' saves · attempt ' + attempts + ' · best ' + Math.max(best, Math.floor(p.x / B)) + ' blocks'; },
     down, up,
     get onScreen() { return visible; },
   };
@@ -1450,28 +1489,28 @@ const Game = (() => {
   $('#bDemo').addEventListener('click', () => setMode('bot'));
 
   reset(); resize(); sync(); lastInput = performance.now();
-  log('demo: o bot clica cedo de propósito');
+  log('demo: the bot clicks early on purpose');
   requestAnimationFrame(frame);
   return api;
 })();
 
 /* ---------- modes ---------- */
 const MODES = [
-  { n: 'Cubo', id: 'cube-late-crash', t: 'O save só vale se o pulo aterrissar em segurança. Olha até 130 ticks à frente e escolhe o menor atraso.',
+  { n: 'Cube', id: 'cube-late-crash', t: 'A save only counts if the jump lands safely. Looks up to 130 ticks ahead and picks the smallest delay.',
     svg: '<g class="spin"><rect x="8" y="8" width="40" height="40" rx="3" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><rect x="18" y="18" width="20" height="20" fill="#0a1236"/><rect x="24" y="24" width="8" height="8" fill="#5ef0a0"/></g>' },
-  { n: 'Nave', id: 'ship-buffer', t: 'Atraso próprio e pequeno (4 ticks) porque a nave tem inércia. Toques de feathering passam direto.',
+  { n: 'Ship', id: 'ship-buffer', t: 'Its own small max delay (4 ticks), because the ship has momentum. Feathering taps go straight through.',
     svg: '<g class="flap"><path d="M6 36 L18 22 H38 L50 30 L38 38 H18 Z" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5" stroke-linejoin="round"/><rect x="22" y="14" width="12" height="12" fill="#0a1236" stroke="#e6f3ff" stroke-width="2"/><path d="M6 30 h-4" stroke="#5ef0a0" stroke-width="3" stroke-linecap="round"/></g>' },
-  { n: 'Bola', id: 'ball-smart', t: 'Flips curtos em corredores contam como pouso, e só é seguro depois de rolar 8 ticks na nova superfície.',
+  { n: 'Ball', id: 'ball-smart', t: 'Short flips in tight corridors count as landings, and a flip is only safe after rolling 8 ticks on the new surface.',
     svg: '<g class="spin"><circle cx="28" cy="28" r="20" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><path d="M28 8 V48 M8 28 H48" stroke="#0a1236" stroke-width="5"/><circle cx="28" cy="28" r="6" fill="#5ef0a0"/></g>' },
-  { n: 'UFO', id: 'ufo-smart', t: 'Uma batida só conta se mais um flap 6, 12 ou 18 ticks antes não teria salvo. Pousar conta como seguro.',
+  { n: 'UFO', id: 'ufo-smart', t: 'A crash only counts if one more flap 6, 12 or 18 ticks earlier couldn\'t have saved you. Landing counts as safe.',
     svg: '<g class="flap"><path d="M18 26 a10 10 0 0 1 20 0" fill="#0a1236" stroke="#e6f3ff" stroke-width="2.5"/><ellipse cx="28" cy="32" rx="22" ry="8" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><circle cx="28" cy="32" r="3" fill="#5ef0a0"/></g>' },
-  { n: 'Onda', id: 'wave-auto-release', t: 'Olha 65 ticks à frente (50 na mini). Pode soltar por você, e spam rápido vai direto para o jogo.',
+  { n: 'Wave', id: 'wave-auto-release', t: 'Looks 65 ticks ahead (50 for mini). Can let go for you, and fast spam goes straight to the game.',
     svg: '<path d="M2 46 L14 34 L26 46 L38 34" fill="none" stroke="#5ef0a0" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/><g class="zig"><path d="M36 16 L52 26 L36 36 Z" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5" stroke-linejoin="round"/></g>' },
-  { n: 'Robô', id: 'robot-smart', t: 'Testa 8 durações de segurar, de um toque até o pulo mais alto, antes de chamar um clique de batida.',
+  { n: 'Robot', id: 'robot-smart', t: 'Tries 8 hold lengths, from a tap to a full-height jump, before calling a press a crash.',
     svg: '<g class="hop"><rect x="12" y="8" width="32" height="24" rx="3" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><rect x="30" y="14" width="8" height="8" fill="#0a1236"/><path d="M20 32 V46 H14 M36 32 V46 H42" stroke="#e6f3ff" stroke-width="3" fill="none" stroke-linecap="round"/></g>' },
-  { n: 'Aranha', id: 'spider-smart', t: 'Um flip só conta como feito depois de 12 ticks em pé na nova superfície.',
+  { n: 'Spider', id: 'spider-smart', t: 'A flip only counts as done once you\'ve stood on the new surface for 12 ticks.',
     svg: '<g class="hop"><ellipse cx="28" cy="24" rx="16" ry="11" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><circle cx="34" cy="22" r="4" fill="#5ef0a0"/><path d="M16 30 L8 44 M24 34 L20 46 M32 34 L36 46 M40 30 L48 44" stroke="#e6f3ff" stroke-width="2.5" stroke-linecap="round"/></g>' },
-  { n: 'Swing', id: 'swing-smart', t: 'Um flip é seguro se mais um flip a tempo teria salvo. Flips rápidos passam direto.',
+  { n: 'Swing', id: 'swing-smart', t: 'A flip is safe if one more flip in time would have saved it. Fast flipping goes straight through.',
     svg: '<g class="flap"><circle cx="28" cy="28" r="14" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><path d="M14 22 L4 14 L10 28 Z M42 22 L52 14 L46 28 Z" fill="#9ccfff" stroke="#e6f3ff" stroke-width="2" stroke-linejoin="round"/><circle cx="28" cy="28" r="5" fill="#0a1236"/></g>' },
 ];
 $('#modesGrid').innerHTML = MODES.map((m, i) =>
@@ -1486,100 +1525,117 @@ if (!reduce && matchMedia('(pointer: fine)').matches) {
   });
 }
 
-/* ---------- in-game menu mock ---------- */
-const MENU = {
-  buffer: [
-    ['stage', 'Stage', 'Atraso máximo (tecla 6). Ligado à demo.'],
-    ['sw', 'practice-only', 'Practice mode only', 'Só buffer no modo prática.', false],
-    ['sw', 'low-latency', 'Low latency mode', 'Atraso de no máximo 1 frame.', false],
-    ['sw', 'training-mode', 'Training mode (hints only)', 'Só dicas, nunca atrasa.', false],
-    ['sw', 'level-memory', 'Level memory', 'Aprende com as suas runs.', true],
-  ],
-  prediction: [
-    ['sw', 'smart-prediction', 'Orb / pad / portal prediction', 'O fantasma usa orbs, pads e portais.', true],
-    ['sw', 'predict-move-triggers', 'Predict move triggers', 'Prevê objetos que triggers vão mexer.', true],
-    ['sw', 'robust-saves', 'Robust saves', 'Testa meio tick à frente e atrás.', true],
-    ['sw', 'predict-through-portals', 'Predict through portals', 'Troca de modo dentro da previsão.', true],
-    ['sw', 'plan-next-click', 'Plan two clicks ahead', 'Tenta mais um clique depois de orbs.', true],
-  ],
-  modes: [
-    ['sw', 'ship-buffer', 'Ship: buffer inputs', '', true],
-    ['sw', 'ball-smart', 'Ball: smart flips', '', true],
-    ['sw', 'ufo-smart', 'UFO: smart flaps', '', true],
-    ['sw', 'robot-smart', 'Robot: smart jumps', '', true],
-    ['sw', 'spider-smart', 'Spider: smart flips', '', true],
-    ['sw', 'swing-smart', 'Swing: smart flips', '', true],
-  ],
-  custom: [
-    ['rg', 'Cube', 10], ['rg', 'Ship', 1], ['rg', 'Ball', 8], ['rg', 'UFO', 6], ['rg', 'Wave', 5], ['rg', 'Robot', 8], ['rg', 'Spider', 6], ['rg', 'Swing', 5],
-  ],
-  tools: [
-    ['sw', 'show-path', 'Path view', 'Previsão desenhada na fase (F10).', true, 'path'],
-    ['sw', 'save-flash', 'Flash when save', 'Tela pisca verde a cada save.', true, 'flash'],
-    ['sw', 'save-ding', 'Ding on save', 'Toca um ding a cada save.', false, 'ding'],
-    ['sw', 'death-heatmap', 'Death heatmap', 'Marcas na barra de progresso.', true],
-    ['sw', 'remove-watermark', 'Remove watermark', 'Esconde o "CBF | estágio".', false],
-    ['sw', 'hide-menu-buttons', 'Hide menu buttons', 'Esconde os corações.', false],
-    ['bt', 'Console log', 'Copy log', 'copy'],
-    ['bt', 'This level', 'Forget level', 'forget'],
-  ],
+/* ---------- in-game menu (v3) ---------- */
+// Tabs, tile labels and texts follow the mod's BufferMenu. `link` ties a tile to the demo.
+const TABS = [
+  { id: 'buffer', n: 'Buffer', info: 'How far back an early click can be held.',
+    g: '<path d="M3 4h10M3 8h10M3 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' },
+  { id: 'prediction', n: 'Prediction', info: 'What the hidden ghost checks before a click goes through.',
+    g: '<circle cx="3.5" cy="12" r="1.6" fill="currentColor"/><circle cx="8" cy="8.5" r="1.8" fill="currentColor"/><circle cx="12.5" cy="4.5" r="2.1" fill="currentColor"/>' },
+  { id: 'modes', n: 'Modes', info: 'Helpers for each game mode, and latency.',
+    g: '<rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="6.5" y="6.5" width="3" height="3" rx=".6" fill="currentColor"/>' },
+  { id: 'frames', n: 'Frames', info: 'Your own limit for each game mode. 0 = no buffer.',
+    g: '<path d="M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="8" r="2.8" fill="currentColor"/>' },
+  { id: 'tools', n: 'Tools', info: 'What you see while playing, stats and the log.',
+    g: '<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1" fill="currentColor"/><rect x="9" y="9" width="4.5" height="4.5" rx="1" fill="currentColor"/>' },
+];
+const OPTS = {
+  prediction: [['robust-saves', 'Robust saves', true], ['orb-align', 'Orb alignment', true], ['orb-timing', 'Orb timing', true], ['predict-moving-objects', 'Moving objects', false], ['predict-move-triggers', 'Move triggers', true], ['predict-through-portals', 'Through portals', true], ['plan-next-click', 'Two clicks ahead', true], ['no-hitch-searches', 'No-hitch searches', true], ['level-memory', 'Level memory', true], ['more-time-death-spots', 'More time at deaths', true]],
+  modes: [['low-latency', 'Low latency', false, 'lowLat'], ['cbf-sync', 'CBF sync', true], ['ship-buffer', 'Ship buffering', true], ['robot-smart', 'Smart robot', true], ['spider-smart', 'Smart spider', true], ['ufo-smart', 'Smart UFO', true], ['ball-smart', 'Smart ball', true], ['swing-smart', 'Smart swing', true], ['auto-click', 'Auto-click (practice)', false]],
+  tools: [['show-path', 'Path view', true, 'path'], ['training-mode', 'Training (hints)', false, 'train'], ['death-heatmap', 'Death heatmap', true], ['save-ding', 'Ding on save', false, 'ding'], ['save-flash', 'Flash when save', true, 'flash'], ['performance-mode', 'Performance mode', false], ['explain-inputs', 'Explain inputs', false], ['remove-watermark', 'Remove watermark', false, 'nowm'], ['hide-menu-buttons', 'Hide menu buttons', false]],
 };
-const MENU_STATE = {};
-const MODE_ICON = { Cube: 0, Ship: 1, Ball: 2, UFO: 3, Wave: 4, Robot: 5, Spider: 6, Swing: 7 };
-let mTab = 'buffer';
-function renderMenu() {
-  const rows = MENU[mTab].map(r => {
-    if (r[0] === 'stage') {
-      const f = [16, 24, 32, 40][Game.st.stage] / 4;
-      return '<div class="m-row"><div class="lbl">' + r[1] + '<small>' + r[2] + '</small></div><div class="stepper"><button type="button" class="m-btn" data-stage="-1" aria-label="Diminuir">−</button><output>' + f + 'f</output><button type="button" class="m-btn" data-stage="1" aria-label="Aumentar">+</button></div></div>';
-    }
-    if (r[0] === 'sw') {
-      const [, id, name, desc, def, link] = r;
-      const on = link ? Game.st[link] : (id in MENU_STATE ? MENU_STATE[id] : def);
-      return '<div class="m-row"><div class="lbl">' + name + (desc ? '<small>' + desc + '</small>' : '') + '</div><button type="button" class="sw" role="switch" aria-checked="' + on + '" aria-label="' + name + '" data-id="' + id + '"' + (link ? ' data-link="' + link + '"' : '') + '></button></div>';
-    }
-    if (r[0] === 'rg') {
-      const id = 'rg-' + r[1].toLowerCase(), v = id in MENU_STATE ? MENU_STATE[id] : r[2];
-      return '<div class="m-row"><svg class="m-ico" viewBox="0 0 56 56" aria-hidden="true">' + MODES[MODE_ICON[r[1]]].svg + '</svg><label class="lbl" for="' + id + '">' + r[1] + '</label><input type="range" id="' + id + '" min="0" max="16" value="' + v + '"><span class="val">' + v + 'f</span></div>';
-    }
-    return '<div class="m-row"><div class="lbl">' + r[1] + '</div><button type="button" class="m-btn" data-act="' + r[3] + '">' + r[2] + '</button></div>';
-  }).join('');
-  $('#mBody').innerHTML = rows;
+const PRESETS = [['Safe', '2 frames, extra margin', 2], ['Balanced', '4 frames, more time at deaths', 3], ['Aggressive', '8 frames, max reach', 5]];
+const MS = { tps: 240, perMode: false, frames: [4, 1, 4, 4, 2, 4, 4, 2] };
+let mTab = 0;
+function optOn(o) {
+  const l = o[3];
+  if (l === 'train') return Game.st.buffer === 'train';
+  if (l === 'nowm') return !Game.st.wm;
+  if (l) return !!Game.st[l];
+  return o[0] in MS ? MS[o[0]] : o[2];
 }
-$$('.m-tabs button').forEach(b => b.addEventListener('click', () => {
-  mTab = b.dataset.tab;
-  $$('.m-tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
-  renderMenu();
-}));
-$('#mBody').addEventListener('click', e => {
-  const sw = e.target.closest('.sw');
-  if (sw) {
-    const on = sw.getAttribute('aria-checked') !== 'true';
-    sw.setAttribute('aria-checked', String(on));
-    if (sw.dataset.link) Game.set(sw.dataset.link, on); else MENU_STATE[sw.dataset.id] = on;
-    if (sw.dataset.id === 'training-mode') { Game.st.buffer = on ? 'train' : 'on'; $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === Game.st.buffer))); }
+function stageText() {
+  if (MS.perMode) return 'Per-mode frames are on (Frames tab). Picking a stage turns them off.';
+  const s = STAGES[Game.st.stage];
+  if (!s) return 'Off: every click goes straight to the game.';
+  return 'Clicks up to ' + (s / 4) + (s === 4 ? ' frame' : ' frames') + ' early are held' + (Game.st.lowLat ? ' (low latency caps it at 1 frame).' : '.');
+}
+function renderSide() {
+  $('#mSide').innerHTML = TABS.map((t, i) => '<button type="button" role="tab" aria-selected="' + (i === mTab) + '" data-i="' + i + '"><svg viewBox="0 0 16 16" aria-hidden="true">' + t.g + '</svg>' + t.n + '</button>').join('');
+}
+function tiles(list) {
+  return '<div class="tiles">' + list.map((o, i) => '<button type="button" class="tile" role="switch" aria-checked="' + optOn(o) + '" data-o="' + i + '"><span>' + o[1] + '</span><i></i></button>').join('') + '</div>';
+}
+function renderPage(anim) {
+  const t = TABS[mTab], pg = $('#mPage');
+  let h = '<h4 class="m-h">' + t.n + '</h4><p class="m-info">' + t.info + '</p>';
+  if (t.id === 'buffer') {
+    h += '<div class="m-sec">STAGE</div><div class="chips">' + STAGE_NAMES.map((n, i) => '<button type="button" data-stage="' + i + '" aria-pressed="' + (!MS.perMode && Game.st.stage === i) + '">' + n + '</button>').join('') + '</div>';
+    h += '<div class="m-status">' + stageText() + '</div>';
+    h += '<div class="m-sec">PRESETS</div><div class="presets">' + PRESETS.map((p, i) => '<button type="button" class="preset" data-preset="' + i + '" style="--o:' + (0.35 + 0.3 * i) + '"><b>' + p[0] + '</b><small>' + p[1] + '</small></button>').join('') + '</div>';
+    h += '<div class="m-card"><span class="lbl">Physics TPS</span><button type="button" class="m-b" data-tps="-1" aria-label="Lower TPS">−</button><output class="' + (MS.tps > 240 ? 'warn' : '') + '">' + MS.tps + '</output><button type="button" class="m-b" data-tps="1" aria-label="Raise TPS">+</button></div>';
+    h += '<div class="m-foot"><span>' + (MS.tps > 240 ? 'TPS above 240 changes the physics: runs aren\'t legit.' : 'Buffer ' + (Game.st.buffer === 'off' || !STAGES[Game.st.stage] ? 'off' : 'on') + ' · CBF off · memory: 0 spots') + '</span><button type="button" class="m-b acc" data-act="run">Run check</button></div>';
+  } else if (t.id === 'frames') {
+    h += '<button type="button" class="tile" role="switch" aria-checked="' + MS.perMode + '" data-permode><span>Use per-mode frames</span><i></i></button>';
+    h += '<div class="frames' + (MS.perMode ? '' : ' dim') + '">' + MODES.map((m, i) => '<div class="frow"><svg viewBox="0 0 56 56" aria-hidden="true">' + m.svg + '</svg><input type="range" min="0" max="20" step="1" value="' + MS.frames[i] * 2 + '" data-fr="' + i + '" aria-label="' + m.n + ' frames"><output>' + MS.frames[i] + 'f</output></div>').join('') + '</div>';
+    h += '<div class="m-status">Drag a slider: half-frame steps, up to 10 frames. Low latency\'s 1-frame limit doesn\'t apply here.</div>';
+  } else {
+    h += tiles(OPTS[t.id]);
+    if (t.id === 'tools') h += '<div class="m-tools">' + ['Stats', 'Console', 'Copy log', 'Forget level', 'Settings'].map((n, i) => '<button type="button" class="m-b" data-act="' + ['stats', 'console', 'copy', 'forget', 'settings'][i] + '">' + n + '</button>').join('') + '</div>';
+  }
+  pg.innerHTML = h;
+  if (anim && !reduce) { pg.classList.remove('anim'); void pg.offsetWidth; pg.classList.add('anim'); }
+}
+function renderHead() {
+  const on = Game.st.buffer === 'on' && STAGES[Game.st.stage] > 0;
+  const pill = $('#mPill');
+  pill.textContent = Game.st.buffer === 'train' ? 'TRAIN' : on ? 'ON' : 'OFF';
+  pill.classList.toggle('off', !on);
+  $('#mSaves').textContent = Game.saves;
+}
+$('#mSide').addEventListener('click', e => {
+  const b = e.target.closest('[data-i]'); if (!b) return;
+  mTab = Number(b.dataset.i); renderSide(); renderPage(true);
+});
+$('#mPage').addEventListener('click', e => {
+  const el = e.target.closest('button'); if (!el) return;
+  const d = el.dataset;
+  if ('stage' in d) { MS.perMode = false; Game.setStage(Number(d.stage)); return; }
+  if ('preset' in d) { const p = PRESETS[d.preset]; MS.perMode = false; Game.setStage(p[2]); toast('Preset: ' + p[0] + ' → ' + STAGE_NAMES[p[2]]); return; }
+  if ('tps' in d) { MS.tps = Math.max(240, Math.min(1000, MS.tps + 10 * Number(d.tps))); renderPage(); return; }
+  if ('permode' in d) { MS.perMode = !MS.perMode; renderPage(); return; }
+  if ('o' in d) {
+    const o = OPTS[TABS[mTab].id][Number(d.o)], v = el.getAttribute('aria-checked') !== 'true';
+    if (o[3] === 'train') Game.setBuffer(v ? 'train' : 'on');
+    else if (o[3] === 'nowm') Game.set('wm', !v);
+    else if (o[3]) Game.set(o[3], v);
+    else { MS[o[0]] = v; el.setAttribute('aria-checked', String(v)); }
     return;
   }
-  const s = e.target.closest('[data-stage]');
-  if (s) { Game.setStage((Game.st.stage + Number(s.dataset.stage) + 4) % 4); return; }
-  const a = e.target.closest('[data-act]');
-  if (a) { if (a.dataset.act === 'copy') Game.copyLog(); else { Game.forget(); toast('Memória da fase apagada'); } }
+  if (d.act === 'run') toast('Run check replays your longest run on the hidden player (in a level).');
+  else if (d.act === 'stats') toast(Game.stats());
+  else if (d.act === 'console') { Game.toggleConsole(); toast(Game.st.console ? 'Console shown' : 'Console hidden'); }
+  else if (d.act === 'copy') Game.copyLog();
+  else if (d.act === 'forget') { Game.forget(); toast('Level memory cleared'); }
+  else if (d.act === 'settings') $('#config').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
 });
-$('#mBody').addEventListener('input', e => {
-  if (e.target.type === 'range') { MENU_STATE[e.target.id] = e.target.value; e.target.nextElementSibling.textContent = e.target.value + 'f'; }
+$('#mPage').addEventListener('input', e => {
+  const i = e.target.dataset.fr; if (i === undefined) return;
+  MS.frames[i] = e.target.value / 2; e.target.nextElementSibling.textContent = MS.frames[i] + 'f';
 });
-document.addEventListener('game-sync', () => { if (mTab === 'tools' || mTab === 'buffer') renderMenu(); });
+document.addEventListener('game-sync', () => { renderHead(); if (TABS[mTab].id !== 'frames') renderPage(); });
+document.addEventListener('game-save', renderHead);
 $$('#themes .theme').forEach(b => b.addEventListener('click', () => {
   $('#mMenu').dataset.mt = b.dataset.t;
   $$('#themes .theme').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
 }));
-renderMenu();
-// drag the menu window by its title bar (like in the game)
+renderSide(); renderPage(); renderHead();
+// drag the window by its header, like in the game; it springs back when let go
 (() => {
-  const m = $('#mMenu'), h = $('.m-head', m); let sx, sy, ox = 0, oy = 0, drag = false;
-  h.addEventListener('pointerdown', e => { drag = true; sx = e.clientX - ox; sy = e.clientY - oy; h.setPointerCapture(e.pointerId); h.style.cursor = 'grabbing'; });
+  const m = $('#mMenu'), h = $('#mHead'); let sx, sy, ox = 0, oy = 0, drag = false;
+  h.addEventListener('pointerdown', e => { drag = true; sx = e.clientX; sy = e.clientY; m.style.transition = 'none'; h.setPointerCapture(e.pointerId); h.style.cursor = 'grabbing'; });
   h.addEventListener('pointermove', e => { if (!drag) return; ox = Math.max(-60, Math.min(60, e.clientX - sx)); oy = Math.max(-40, Math.min(40, e.clientY - sy)); m.style.translate = ox + 'px ' + oy + 'px'; });
-  const end = () => { if (!drag) return; drag = false; h.style.cursor = ''; m.style.transition = 'translate .5s cubic-bezier(.2,1.4,.4,1)'; ox = oy = 0; m.style.translate = '0 0'; setTimeout(() => { m.style.transition = ''; }, 520); };
+  const end = () => { if (!drag) return; drag = false; h.style.cursor = ''; m.style.transition = 'translate .5s cubic-bezier(.2,1.4,.4,1)'; m.style.translate = '0 0'; setTimeout(() => { m.style.transition = ''; }, 520); };
   h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
 })();
 function openMenu() {
@@ -1595,12 +1651,12 @@ function hitKey(k) {
 }
 function keyAction(k) {
   hitKey(k);
-  if (k === '6') { Game.cycleStage(); toast('Atraso máximo: ' + [16, 24, 32, 40][Game.st.stage] / 4 + ' frames'); }
-  else if (k === '7' || k === 'RS') openMenu();
+  if (k === '6') { Game.cycleStage(); toast('Stage: ' + STAGE_NAMES[Game.st.stage]); }
+  else if (k === '7' || k === 'RS' || k === 'MB') openMenu();
   else if (k === 'F8') Game.copyLog();
-  else if (k === 'F9') { Game.toggleConsole(); toast(Game.st.console ? 'Console visível' : 'Console escondido'); }
-  else if (k === 'F10') { Game.toggle('path'); toast(Game.st.path ? 'Path view ligado' : 'Path view desligado'); }
-  else if (k === 'F11') { Game.forget(); toast('Memória da fase apagada'); }
+  else if (k === 'F9') { Game.toggleConsole(); toast(Game.st.console ? 'Console shown' : 'Console hidden'); }
+  else if (k === 'F10') { Game.toggle('path'); toast(Game.st.path ? 'Path view on' : 'Path view off'); }
+  else if (k === 'F11') { Game.forget(); toast('Level memory cleared'); }
 }
 $$('.key').forEach(b => b.addEventListener('click', () => keyAction(b.dataset.k)));
 addEventListener('keydown', e => {
@@ -1619,14 +1675,14 @@ addEventListener('keyup', e => {
 });
 
 /* ---------- settings explorer ---------- */
-const SETTINGS = [{"id":"custom-ticks","n":"Custom stage: max delay (ticks)","t":"int","d":"Max delay for the CUSTOM stage (key 6), all modes except wave. 4 ticks = 1 frame at 60fps.","v":40,"min":1,"max":64},{"id":"custom-wave-ticks","n":"Custom stage: max wave delay (ticks)","t":"int","d":"Max delay for the CUSTOM stage (key 6) while in wave.","v":20,"min":0,"max":64},{"id":"sim-budget-ms","n":"Prediction time budget (ms)","t":"float","d":"Max time spent predicting per click. Higher = finds longer saves on big windows, but may hitch on dense levels.","v":8.0,"min":1.0,"max":30.0},{"id":"smart-prediction","n":"Orb / pad / portal prediction","t":"bool","d":"Let the ghost use orbs, pads, gravity portals and speed portals. Turn off if you see glitches with objects.","v":true},{"id":"debug-console","n":"Debug console window","t":"bool","d":"Also open a separate Windows console with the same log as the in-game console (F9). Needs a restart.","v":false,"pl":["windows"]},{"id":"ground-horizon","n":"Cube / ball lookahead (ticks)","t":"int","d":"How far ahead the prediction looks for cube, ball and spider. A cube jump lasts about 100 ticks, so the old 48 never saw the landing. Higher = catches later hits but costs more time per click.","v":130,"min":48,"max":240},{"id":"practice-only","n":"Practice mode only","t":"bool","d":"ON: only buffer inputs in practice mode. OFF: buffer in every run.","v":false},{"id":"wave-horizon","n":"Wave lookahead (ticks)","t":"int","d":"How far ahead the wave prediction looks (mini wave uses 15 ticks less). 65 = 65 normal / 50 mini. Longer sees crashes further away but costs more time per click.","v":65,"min":20,"max":160},{"id":"orb-assume-hit","n":"Orbs: assume you click them (calculation mode)","t":"bool","d":"The prediction clicks every orb it touches, as if you hit it on time. Turn off if it predicts deaths for orbs you normally skip.","v":true},{"id":"orb-try-both","n":"Orbs: also try the other choice","t":"bool","d":"If a prediction touches an orb and dies, run it again with the opposite orb choice (click / skip) and keep the better one, like a player who only clicks the orb when needed.","v":true},{"id":"avoid-moving-objects","n":"Don't buffer near moving objects","t":"bool","d":"Experimental. The prediction sees the level frozen at your click. If the ghost's path touches spikes or blocks that moved recently (move/rotate triggers), the input goes through untouched instead of being delayed. Can cancel good saves on levels with lots of movement.","v":false},{"id":"wave-auto-release","n":"Wave auto-release","t":"bool","d":"While you hold in wave, if holding would crash within the window below and letting go clearly survives, the mod lets go for you. Your own release is then ignored. Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"auto-release-window","n":"Auto-release window (ticks)","t":"int","d":"Auto-release only fires when holding would crash within this many ticks. Small = lets go at the last moment. 4 ticks = 1 frame at 60fps.","v":6,"min":2,"max":24},{"id":"drift-check","n":"Drift check (debug)","t":"bool","d":"After each input, compare where the prediction said you'd go with where you actually went, and log the biggest gap in the in-game console (F9). Use it to see how precise the predictions are on a level.","v":false},{"id":"wave-spam-gap","n":"Wave spam: max gap (ticks)","t":"int","d":"Presses/releases closer together than this count as spam. After enough in a row (see the next setting), wave inputs go straight to the game until you pause. 16 ticks = 4 frames at 60fps (about 7 clicks/sec). Raise it if spam still gets buffered, lower it if tight wave parts stop being buffered.","v":16,"min":4,"max":40},{"id":"wave-spam-streak","n":"Wave spam: fast inputs before spam","t":"int","d":"How many fast presses/releases in a row it takes before spam goes straight to the game. The inputs before that are still buffered, so lower it (2) if the start of your spam feels off, raise it if quick wave zigzags stop being buffered.","v":3,"min":2,"max":6},{"id":"orb-align","n":"Orb alignment","t":"bool","d":"If you press a little before reaching an orb (and the press wouldn't hit it), the press is held back until you're inside the orb so it hits. Works for every mode except ship and wave. Needs 'Orb / pad / portal prediction' on.","v":true},{"id":"orb-align-ticks","n":"Orb alignment: max delay (ticks)","t":"int","d":"How early a press may be and still be moved onto the orb. 16 ticks = 4 frames at 60fps.","v":16,"min":1,"max":64},{"id":"wave-v46","n":"Wave: old v4.6 logic","t":"bool","d":"Use the old v4.6 wave rules (big-gain bar, 1-tick queued opposite). Off = the cube-style wave: a crash you could still turn away from counts as safe, and the smallest delay that clears the obstacle wins.","v":false},{"id":"wave-safety-margin","n":"Wave: safety margin","t":"bool","d":"When a wave save is found, use a delay with one tick of room on both sides instead of the one that only just clears the spike, so tiny differences in the real run can't clip it. Can add 1 tick (0.25f) to some saves.","v":true},{"id":"show-path","n":"Path view on at start","t":"bool","d":"Draw the predicted path in the level after each input (toggle any time with F10). Red = what the input would do right now, green = what the game actually gets, white dot = where a delayed input fires, red dot = crash. Costs two extra predictions per click while on.","v":false},{"id":"orb-align-ground","n":"Orb alignment: also from the ground","t":"bool","d":"Off: presses made while standing on the ground are normal jumps and never get moved onto an orb. On: a ground jump made just before an orb can be turned into an orb hit.","v":false},{"id":"full-ghost-state","n":"Full ghost state (v2.8)","t":"bool","d":"Copy the full player state (slopes, timers, forces, dash...) into the prediction ghost. Turn off to go back to the v2.7 ghost if predictions feel worse.","v":true},{"id":"robot-smart","n":"Robot: smart jumps","t":"bool","d":"A robot press only counts as a crash if no hold length saves it (your usual hold, then 8 holds from a tap to a full-height jump, nearest to yours first). Saves are found for presses that need a different jump height, and presses you can still control aren't delayed. Robot releases are judged the same way: a delayed release has to make the jump land safely.","v":true},{"id":"robot-auto-release","n":"Robot auto-release","t":"bool","d":"While you hold a robot jump, if holding longer would crash within the auto-release window and letting go survives, the mod lets go for you. Your own release is then ignored. Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"auto-click","n":"Auto-click (clicks for you)","t":"bool","d":"When you're not holding and doing nothing would crash within the auto-release window, but a click right now (with your usual hold) is fully safe, the mod clicks for you. Your own click, if it still comes, is ignored. Cube, ball, UFO, robot, spider and swing (not wave / ship). Practice mode only, unless 'Auto-release in normal runs' is on; then AUTO INPUTS ON shows on screen. Runs with this aren't legit.","v":false},{"id":"level-memory","n":"Level memory (learns from your runs)","t":"bool","d":"Remembers, per level and per spot, which delays worked, where saves ended in deaths and where you keep dying. Delays that worked before are tried first; spots where saves keep failing are left alone; orange dots in the path view mark spots where you die a lot. F11 forgets the current level.","v":true},{"id":"auto-release-normal-runs","n":"Auto-release in normal runs","t":"bool","d":"Let auto-release (wave / robot / dash) and auto-click also work outside practice mode. While they can act, an 'AUTO INPUTS ON' tag is shown on screen. Never use it for verified or leaderboard runs.","v":false},{"id":"spider-smart","n":"Spider: smart flips","t":"bool","d":"A spider flip counts as done once you stand on the new surface for 12 ticks, and a crash you could have avoided by flipping back counts as safe. Stops the spider from delaying flips because of obstacles that need your next click.","v":true},{"id":"dash-auto-release","n":"Dash orb auto-release","t":"bool","d":"While you hold a dash, if holding longer would crash within the auto-release window and letting go survives, the mod lets go for you (your own release is then ignored). Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"perf-log","n":"Performance log (debug)","t":"bool","d":"After each click, log in the console (F9) how long its predictions took, how many runs and ghost ticks it used, and the cost per ghost tick. Changes nothing about the decisions.","v":false},{"id":"ship-buffer","n":"Ship: buffer inputs","t":"bool","d":"Buffer ship presses and releases. A crash only counts if you couldn't have recovered (the opposite input 8 / 16 / 24 ticks before it is tried), the smallest delay that clears wins, and only very fast taps go straight through (ship spam gap). Off = ship is never touched.","v":true},{"id":"ship-max-delay","n":"Ship: max delay (ticks)","t":"int","d":"Ship's own max delay, used instead of the stage (key 6). Ship has momentum, so small delays are enough and big ones feel laggy. 4 ticks = 1 frame at 60fps.","v":4,"min":0,"max":16},{"id":"orb-timing","n":"Orb timing","t":"bool","d":"For orbs that only work at a specific moment inside them: a press already inside an orb that would crash is moved 1-6 ticks later in the orb if that survives, the orb timing that worked at a spot before is tried first, and predictions also try clicking later orbs 3 and 6 ticks into them.","v":true},{"id":"cube-late-crash","n":"Cube: ignore crashes after (ticks)","t":"int","d":"If pressing now only crashes after a normal cube / ball jump would have landed, the crash is the next obstacle's, not this click's: no delay can help, so the mod skips the search (saves time and stutter). 90 ticks = about 0.37 s. 0 = always search.","v":90,"min":0,"max":240},{"id":"predict-moving-objects","n":"Predict moving objects (experimental)","t":"bool","d":"Spikes, saws and blocks near your path that are moving right now (move / rotate triggers) are moved along their current motion during predictions: straight lines, curved / circular paths and spinning, so saves account for where they will be. Easing (speeding up / slowing down) isn't predicted. Turn 'Don't buffer near moving objects' off when using this.","v":false},{"id":"predict-move-triggers","n":"Predict move triggers","t":"bool","d":"Spikes, blocks and orbs that a trigger ahead of you will move are predicted the way the game will move them: move triggers (offset, duration, easing), rotate triggers (spinning around their center group or in place), toggle triggers that switch a group off or on, and spawn triggers, followed through their delays to the move / rotate / toggle triggers they set off (also spawns the game already started with a delay). Moves / rotations already in progress at your click follow their real path. Plain triggers only: target / follow / aim modes and lock to player / camera aren't predicted, touch triggers only once they've fired, and spawn triggers with random delays, remaps or ordered spawning aren't followed. The mod also checks itself: when a real trigger moves something, it compares the result with what it would have predicted, and if a level's triggers keep coming out wrong it turns this off for that level (the log says so). Turn off if saves near moving parts look wrong.","v":true},{"id":"no-hitch-searches","n":"No-hitch searches","t":"bool","d":"When a search runs out of time before it tried every delay, your click waits one tick and the search goes on from there with fresh time (up to 4 times), instead of giving up on the save. The delays it already tried all crashed, so waiting a tick loses nothing, and busy parts don't stutter from long searches. If it still finds no save, the click goes through then. A new input of yours meanwhile ends the search. Turn off if clicks in busy parts feel late.","v":true},{"id":"plan-next-click","n":"Plan two clicks ahead","t":"bool","d":"When a predicted run crashes into something your next click would handle (after an orb, or right after a mode portal), the ghost tries one more click (at least 24 ticks later). If that saves it, the crash isn't blamed on this click: an orb click is left alone or moved to a timing that works with your next click, and inputs before a portal aren't delayed for nothing. Turn off if saves after orbs / portals feel late.","v":true},{"id":"robust-saves","n":"Robust saves","t":"bool","d":"Before a save is used, it is also tested with you slightly ahead of and behind your real position (about half a tick). Saves that only work at the exact spot are swapped for a nearby delay that survives all three, if there is one. Costs a few extra predictions per save, never per normal click.","v":true},{"id":"ignore-touching-hazards","n":"Ignore hazards you're touching","t":"bool","d":"Spikes / saws that overlap you at the moment of the click while you're alive can't be what kills you (e.g. a spike the level makes follow the player, or noclip), so predictions ignore them. Fixes predictions that died on their very first tick (GRIEF's wave).","v":true},{"id":"death-log","n":"Death log (debug)","t":"bool","d":"On every 'no save', log what killed the prediction ghost (object ID, type, where it is relative to you, hitboxes). Ghost deaths in the first 3 ticks are always logged. Use it with F8 when a level predicts badly.","v":false},{"id":"explain-inputs","n":"Explain every input (debug)","t":"bool","d":"Also log the inputs that were passed straight to the game and why: safe as it is, spam guard, late-crash rule, max delay 0. Busy log; turn on to see what the mod does in a part, then use F8.","v":false},{"id":"remove-watermark","n":"Remove watermark","t":"bool","d":"Hide the 'CBF | stage' label shown in the bottom left of levels while the buffer is on.","v":false},{"id":"hide-menu-buttons","n":"Hide menu buttons","t":"bool","d":"Hide the heart buttons on the main menu and the pause menu. The menu still opens with Right Shift (or the menu key). Phones without a keyboard: turn this off here to get the buttons back.","v":false},{"id":"cbf-sync","n":"Click Between Frames sync","t":"bool","d":"With the Click Between Frames mod, a click lands partway through a physics tick. The prediction then starts from that exact moment, and delayed inputs land on the tick the prediction tested. Has no effect without CBF.","v":true},{"id":"low-latency","n":"Low latency mode","t":"bool","d":"For players who feel the buffer as lag or delayed clicks: clicks made while a delay is waiting are not shifted after it (no chain of delayed clicks), delays are at most 1 frame, searches are capped at 3 ms (no frame hitches), and robust saves / wave margin (which can add a tick) are off. On by default, and the same in every level.","v":true},{"id":"ufo-smart","n":"UFO: smart flaps","t":"bool","d":"A UFO crash only counts if one more flap 6 / 12 / 18 ticks before it couldn't have saved you, landing on something counts as safe, the smallest delay that works wins, and fast flapping goes straight through (spam guard). Off = UFO uses the plain rules like before.","v":true},{"id":"more-time-death-spots","n":"More time at spots you keep dying","t":"bool","d":"At a spot where level memory has seen you die 2+ times, an input that is only safe if your next input comes in time (wave / ship / UFO / spider) gets the small delay that pushes the crash furthest away, so you have more time to react. Normal play elsewhere is not affected. Needs Level memory.","v":true},{"id":"ship-spam-gap","n":"Ship: spam gap (ticks)","t":"int","d":"Ship is steered by feathering, so only taps closer together than this count as spam and go straight through. The normal spam gap (16) made almost every ship input spam, so ship was barely buffered. 4 ticks = 1 frame at 60fps.","v":6,"min":2,"max":40},{"id":"ball-smart","n":"Ball: smart flips","t":"bool","d":"Ball flips that land after only a few ticks (tight corridors) count as landings, a flip is only called safe after rolling 8 ticks on the new surface (spikes right after the landing spot), and fast flipping goes straight through (spam guard).","v":true},{"id":"swing-smart","n":"Swing: smart flips","t":"bool","d":"A swing flip counts as safe if one more flip in time would have saved it (like the UFO), and fast flipping goes straight through (spam guard).","v":true},{"id":"training-mode","n":"Training mode (hints only)","t":"bool","d":"The buffer still predicts every input but never delays it. When an input would have been saved, a hint shows how early you were (e.g. 'click 0.5f early'), so you learn the timing yourself.","v":false},{"id":"per-level-settings","n":"Per-level settings","t":"bool","d":"The menu switches are remembered for each level and come back when you open it again. Your stage (key 6) and low latency are the same in every level. Off by default: every level uses the same switches.","v":false},{"id":"death-heatmap","n":"Death heatmap","t":"bool","d":"Red marks on the progress bar where level memory saw you die; brighter = more deaths.","v":true},{"id":"save-ding","n":"Ding on save","t":"bool","d":"Plays a short ding every time the buffer saves one of your clicks.","v":true},{"id":"save-flash","n":"Flash when save","t":"bool","d":"Flashes the screen green every time the buffer saves one of your clicks.","v":false},{"id":"performance-mode","n":"Performance mode","t":"bool","d":"For PCs that drop frames when you click: predictions get at most 4 ms per click, no extra robustness checks, orbs are only tried with a normal click (no late-click retries), and the drift check and live path view are off. Saves can be a little less precise.","v":false},{"id":"predict-through-portals","n":"Predict through portals","t":"bool","d":"Predictions keep going through mode portals (cube, ship, ball, UFO, wave, robot, spider, swing): the hidden ghost switches mode there instead of the prediction stopping, so clicks right before a portal can be saved. The new mode's floor / ceiling isn't known to the prediction. Teleport portals move the ghost to the orange end, and after a solo portal only P1 goes on (v2.84). After a dual portal P2 appears with P1, upside down, and both go on (v2.85). Teleports with forces / redirects / gravity changes still stop it. Turn off if saves around portals look wrong.","v":true},{"id":"auto-budget","n":"Auto time budget","t":"bool","d":"While the game is already dropping frames (a frame took over twice as long as it should, and over 20 ms), clicks get at most 4 ms of prediction time so it doesn't get worse. Otherwise the time budget setting is used as it is.","v":true},{"id":"menu-theme","n":"Menu theme","t":"string","d":"Colours of the in-game menu.","v":"Purple","opts":["Purple","Pink","Blue","Green","Dark"]},{"id":"bind-stage","n":"Key: change stage","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["Six"]},{"id":"bind-menu","n":"Key: open menu","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["Seven"]},{"id":"bind-export","n":"Key: copy console log","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F8"]},{"id":"bind-console","n":"Key: show / hide console","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F9"]},{"id":"bind-path","n":"Key: path view","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F10"]},{"id":"bind-forget","n":"Key: forget this level","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F11"]},{"id":"tps","n":"Physics TPS","t":"int","d":"Physics steps per second in levels. 240 is the normal game. Higher values change the physics, so runs at anything but 240 aren't legit completions. The buffer's windows scale with it automatically.","v":240,"min":240,"max":1000}];
+const SETTINGS = [{"id":"custom-ticks","n":"Custom stage: max delay (ticks)","t":"int","d":"Max delay for the CUSTOM stage (key 6), all modes except wave. 4 ticks = 1 frame at 60fps.","v":40,"min":1,"max":64},{"id":"custom-wave-ticks","n":"Custom stage: max wave delay (ticks)","t":"int","d":"Max delay for the CUSTOM stage (key 6) while in wave.","v":20,"min":0,"max":64},{"id":"sim-budget-ms","n":"Prediction time budget (ms)","t":"float","d":"Max time spent predicting per click. Higher = finds longer saves on big windows, but may hitch on dense levels.","v":8.0,"min":1.0,"max":30.0},{"id":"smart-prediction","n":"Orb / pad / portal prediction","t":"bool","d":"Let the ghost use orbs, pads, gravity portals and speed portals. Turn off if you see glitches with objects.","v":true},{"id":"debug-console","n":"Debug console window","t":"bool","d":"Also open a separate Windows console with the same log as the in-game console (F9). Needs a restart.","v":false,"pl":["windows"]},{"id":"ground-horizon","n":"Cube / ball lookahead (ticks)","t":"int","d":"How far ahead the prediction looks for cube, ball and spider. A cube jump lasts about 100 ticks, so the old 48 never saw the landing. Higher = catches later hits but costs more time per click.","v":130,"min":48,"max":240},{"id":"practice-only","n":"Practice mode only","t":"bool","d":"ON: only buffer inputs in practice mode. OFF: buffer in every run.","v":false},{"id":"wave-horizon","n":"Wave lookahead (ticks)","t":"int","d":"How far ahead the wave prediction looks (mini wave uses 15 ticks less). 65 = 65 normal / 50 mini. Longer sees crashes further away but costs more time per click.","v":65,"min":20,"max":160},{"id":"orb-assume-hit","n":"Orbs: assume you click them (calculation mode)","t":"bool","d":"The prediction clicks every orb it touches, as if you hit it on time. Turn off if it predicts deaths for orbs you normally skip.","v":true},{"id":"orb-try-both","n":"Orbs: also try the other choice","t":"bool","d":"If a prediction touches an orb and dies, run it again with the opposite orb choice (click / skip) and keep the better one, like a player who only clicks the orb when needed.","v":true},{"id":"avoid-moving-objects","n":"Don't buffer near moving objects","t":"bool","d":"Experimental. The prediction sees the level frozen at your click. If the ghost's path touches spikes or blocks that moved recently (move/rotate triggers), the input goes through untouched instead of being delayed. Can cancel good saves on levels with lots of movement.","v":false},{"id":"wave-auto-release","n":"Wave auto-release","t":"bool","d":"While you hold in wave, if holding would crash within the window below and letting go clearly survives, the mod lets go for you. Your own release is then ignored. Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"auto-release-window","n":"Auto-release window (ticks)","t":"int","d":"Auto-release only fires when holding would crash within this many ticks. Small = lets go at the last moment. 4 ticks = 1 frame at 60fps.","v":6,"min":2,"max":24},{"id":"drift-check","n":"Drift check (debug)","t":"bool","d":"After each input, compare where the prediction said you'd go with where you actually went, and log the biggest gap in the in-game console (F9). Use it to see how precise the predictions are on a level.","v":false},{"id":"wave-spam-gap","n":"Wave spam: max gap (ticks)","t":"int","d":"Presses/releases closer together than this count as spam. After enough in a row (see the next setting), wave inputs go straight to the game until you pause. 16 ticks = 4 frames at 60fps (about 7 clicks/sec). Raise it if spam still gets buffered, lower it if tight wave parts stop being buffered.","v":16,"min":4,"max":40},{"id":"wave-spam-streak","n":"Wave spam: fast inputs before spam","t":"int","d":"How many fast presses/releases in a row it takes before spam goes straight to the game. The inputs before that are still buffered, so lower it (2) if the start of your spam feels off, raise it if quick wave zigzags stop being buffered.","v":3,"min":2,"max":6},{"id":"orb-align","n":"Orb alignment","t":"bool","d":"If you press a little before reaching an orb (and the press wouldn't hit it), the press is held back until you're inside the orb so it hits. Works for every mode except ship and wave. Needs 'Orb / pad / portal prediction' on.","v":true},{"id":"orb-align-ticks","n":"Orb alignment: max delay (ticks)","t":"int","d":"How early a press may be and still be moved onto the orb. 16 ticks = 4 frames at 60fps.","v":16,"min":1,"max":64},{"id":"wave-v46","n":"Wave: old v4.6 logic","t":"bool","d":"Use the old v4.6 wave rules (big-gain bar, 1-tick queued opposite). Off = the cube-style wave: a crash you could still turn away from counts as safe, and the smallest delay that clears the obstacle wins.","v":false},{"id":"wave-safety-margin","n":"Wave: safety margin","t":"bool","d":"When a wave save is found, use a delay with one tick of room on both sides instead of the one that only just clears the spike, so tiny differences in the real run can't clip it. Can add 1 tick (0.25f) to some saves.","v":true},{"id":"show-path","n":"Path view on at start","t":"bool","d":"Draw the predicted path in the level after each input (toggle any time with F10). Red = what the input would do right now, green = what the game actually gets, white dot = where a delayed input fires, red dot = crash. Costs two extra predictions per click while on.","v":false},{"id":"orb-align-ground","n":"Orb alignment: also from the ground","t":"bool","d":"Off: presses made while standing on the ground are normal jumps and never get moved onto an orb. On: a ground jump made just before an orb can be turned into an orb hit.","v":false},{"id":"full-ghost-state","n":"Full ghost state (v2.8)","t":"bool","d":"Copy the full player state (slopes, timers, forces, dash...) into the prediction ghost. Turn off to go back to the v2.7 ghost if predictions feel worse.","v":true},{"id":"robot-smart","n":"Robot: smart jumps","t":"bool","d":"A robot press only counts as a crash if no hold length saves it (your usual hold, then 8 holds from a tap to a full-height jump, nearest to yours first). Saves are found for presses that need a different jump height, and presses you can still control aren't delayed. Robot releases are judged the same way: a delayed release has to make the jump land safely.","v":true},{"id":"robot-auto-release","n":"Robot auto-release","t":"bool","d":"While you hold a robot jump, if holding longer would crash within the auto-release window and letting go survives, the mod lets go for you. Your own release is then ignored. Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"auto-click","n":"Auto-click (clicks for you)","t":"bool","d":"When you're not holding and doing nothing would crash within the auto-release window, but a click right now (with your usual hold) is fully safe, the mod clicks for you. Your own click, if it still comes, is ignored. Cube, ball, UFO, robot, spider and swing (not wave / ship). Practice mode only, unless 'Auto-release in normal runs' is on; then AUTO INPUTS ON shows on screen. Runs with this aren't legit.","v":false},{"id":"level-memory","n":"Level memory (learns from your runs)","t":"bool","d":"Remembers, per level and per spot, which delays worked, where saves ended in deaths and where you keep dying. Delays that worked before are tried first; spots where saves keep failing are left alone; orange dots in the path view mark spots where you die a lot. F11 forgets the current level.","v":true},{"id":"auto-release-normal-runs","n":"Auto-release in normal runs","t":"bool","d":"Let auto-release (wave / robot / dash) and auto-click also work outside practice mode. While they can act, an 'AUTO INPUTS ON' tag is shown on screen. Never use it for verified or leaderboard runs.","v":false},{"id":"spider-smart","n":"Spider: smart flips","t":"bool","d":"A spider flip counts as done once you stand on the new surface for 12 ticks, and a crash you could have avoided by flipping back counts as safe. Stops the spider from delaying flips because of obstacles that need your next click.","v":true},{"id":"dash-auto-release","n":"Dash orb auto-release","t":"bool","d":"While you hold a dash, if holding longer would crash within the auto-release window and letting go survives, the mod lets go for you (your own release is then ignored). Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"perf-log","n":"Performance log (debug)","t":"bool","d":"After each click, log in the console (F9) how long its predictions took, how many runs and ghost ticks it used, and the cost per ghost tick. Changes nothing about the decisions.","v":false},{"id":"ship-buffer","n":"Ship: buffer inputs","t":"bool","d":"Buffer ship presses and releases. A crash only counts if you couldn't have recovered (the opposite input 8 / 16 / 24 ticks before it is tried), the smallest delay that clears wins, and only very fast taps go straight through (ship spam gap). Off = ship is never touched.","v":true},{"id":"ship-max-delay","n":"Ship: max delay (ticks)","t":"int","d":"Ship's own max delay, used instead of the stage (key 6). Ship has momentum, so small delays are enough and big ones feel laggy. 4 ticks = 1 frame at 60fps.","v":4,"min":0,"max":16},{"id":"orb-timing","n":"Orb timing","t":"bool","d":"For orbs that only work at a specific moment inside them: a press already inside an orb that would crash is moved 1-6 ticks later in the orb if that survives, the orb timing that worked at a spot before is tried first, and predictions also try clicking later orbs 3 and 6 ticks into them.","v":true},{"id":"cube-late-crash","n":"Cube: ignore crashes after (ticks)","t":"int","d":"If pressing now only crashes after a normal cube / ball jump would have landed, the crash is the next obstacle's, not this click's: no delay can help, so the mod skips the search (saves time and stutter). 90 ticks = about 0.37 s. 0 = always search.","v":90,"min":0,"max":240},{"id":"predict-moving-objects","n":"Predict moving objects (experimental)","t":"bool","d":"Spikes, saws and blocks near your path that are moving right now (move / rotate triggers) are moved along their current motion during predictions: straight lines, curved / circular paths and spinning, so saves account for where they will be. Easing (speeding up / slowing down) isn't predicted. Turn 'Don't buffer near moving objects' off when using this.","v":false},{"id":"predict-move-triggers","n":"Predict move triggers","t":"bool","d":"Spikes, blocks and orbs that a trigger ahead of you will move are predicted the way the game will move them: move triggers (offset, duration, easing), rotate triggers (spinning around their center group or in place), toggle triggers that switch a group off or on, and spawn triggers, followed through their delays to the move / rotate / toggle triggers they set off (also spawns the game already started with a delay). Moves / rotations already in progress at your click follow their real path. Plain triggers only: target / follow / aim modes and lock to player / camera aren't predicted, touch triggers only once they've fired, and spawn triggers with random delays, remaps or ordered spawning aren't followed. The mod also checks itself: when a real trigger moves something, it compares the result with what it would have predicted, and if a level's triggers keep coming out wrong it turns this off for that level (the log says so). Turn off if saves near moving parts look wrong.","v":true},{"id":"no-hitch-searches","n":"No-hitch searches","t":"bool","d":"When a search runs out of time before it tried every delay, your click waits one tick and the search goes on from there with fresh time (up to 4 times), instead of giving up on the save. The delays it already tried all crashed, so waiting a tick loses nothing, and busy parts don't stutter from long searches. If it still finds no save, the click goes through then. A new input of yours meanwhile ends the search. Turn off if clicks in busy parts feel late.","v":true},{"id":"plan-next-click","n":"Plan two clicks ahead","t":"bool","d":"When a predicted run crashes into something your next click would handle (after an orb, or right after a mode portal), the ghost tries one more click (at least 24 ticks later). If that saves it, the crash isn't blamed on this click: an orb click is left alone or moved to a timing that works with your next click, and inputs before a portal aren't delayed for nothing. Turn off if saves after orbs / portals feel late.","v":true},{"id":"robust-saves","n":"Robust saves","t":"bool","d":"Before a save is used, it is also tested with you slightly ahead of and behind your real position (about half a tick). Saves that only work at the exact spot are swapped for a nearby delay that survives all three, if there is one. Costs a few extra predictions per save, never per normal click.","v":true},{"id":"ignore-touching-hazards","n":"Ignore hazards you're touching","t":"bool","d":"Spikes / saws that overlap you at the moment of the click while you're alive can't be what kills you (e.g. a spike the level makes follow the player, or noclip), so predictions ignore them. Fixes predictions that died on their very first tick (GRIEF's wave).","v":true},{"id":"death-log","n":"Death log (debug)","t":"bool","d":"On every 'no save', log what killed the prediction ghost (object ID, type, where it is relative to you, hitboxes). Ghost deaths in the first 3 ticks are always logged. Use it with F8 when a level predicts badly.","v":false},{"id":"explain-inputs","n":"Explain every input (debug)","t":"bool","d":"Also log the inputs that were passed straight to the game and why: safe as it is, spam guard, late-crash rule, max delay 0. Busy log; turn on to see what the mod does in a part, then use F8.","v":false},{"id":"remove-watermark","n":"Remove watermark","t":"bool","d":"Hide the 'CBF | stage' label shown in the bottom left of levels while the buffer is on.","v":false},{"id":"hide-menu-buttons","n":"Hide menu buttons","t":"bool","d":"Hide the heart buttons on the main menu and the pause menu. The menu still opens with Right Shift (or the menu key). Phones without a keyboard: turn this off here to get the buttons back.","v":false},{"id":"cbf-sync","n":"Click Between Frames sync","t":"bool","d":"With the Click Between Frames mod, a click lands partway through a physics tick. The prediction then starts from that exact moment, and delayed inputs land on the tick the prediction tested. Has no effect without CBF.","v":true},{"id":"low-latency","n":"Low latency mode","t":"bool","d":"For players who feel the buffer as lag or delayed clicks: clicks made while a delay is waiting are not shifted after it (no chain of delayed clicks), delays are at most 1 frame, searches are capped at 3 ms (no frame hitches), and robust saves / wave margin (which can add a tick) are off. On by default, and the same in every level.","v":true},{"id":"ufo-smart","n":"UFO: smart flaps","t":"bool","d":"A UFO crash only counts if one more flap 6 / 12 / 18 ticks before it couldn't have saved you, landing on something counts as safe, the smallest delay that works wins, and fast flapping goes straight through (spam guard). Off = UFO uses the plain rules like before.","v":true},{"id":"more-time-death-spots","n":"More time at spots you keep dying","t":"bool","d":"At a spot where level memory has seen you die 2+ times, an input that is only safe if your next input comes in time (wave / ship / UFO / spider) gets the small delay that pushes the crash furthest away, so you have more time to react. Normal play elsewhere is not affected. Needs Level memory.","v":true},{"id":"ship-spam-gap","n":"Ship: spam gap (ticks)","t":"int","d":"Ship is steered by feathering, so only taps closer together than this count as spam and go straight through. The normal spam gap (16) made almost every ship input spam, so ship was barely buffered. 4 ticks = 1 frame at 60fps.","v":6,"min":2,"max":40},{"id":"ball-smart","n":"Ball: smart flips","t":"bool","d":"Ball flips that land after only a few ticks (tight corridors) count as landings, a flip is only called safe after rolling 8 ticks on the new surface (spikes right after the landing spot), and fast flipping goes straight through (spam guard).","v":true},{"id":"swing-smart","n":"Swing: smart flips","t":"bool","d":"A swing flip counts as safe if one more flip in time would have saved it (like the UFO), and fast flipping goes straight through (spam guard).","v":true},{"id":"training-mode","n":"Training mode (hints only)","t":"bool","d":"The buffer still predicts every input but never delays it. When an input would have been saved, a hint shows how early you were (e.g. 'click 0.5f early'), so you learn the timing yourself.","v":false},{"id":"per-level-settings","n":"Per-level settings","t":"bool","d":"The menu switches are remembered for each level and come back when you open it again. Your stage (key 6) and low latency are the same in every level. Off by default: every level uses the same switches.","v":false},{"id":"death-heatmap","n":"Death heatmap","t":"bool","d":"Red marks on the progress bar where level memory saw you die; brighter = more deaths.","v":true},{"id":"save-ding","n":"Ding on save","t":"bool","d":"Plays a short ding every time the buffer saves one of your clicks.","v":true},{"id":"save-flash","n":"Flash when save","t":"bool","d":"Flashes the screen green every time the buffer saves one of your clicks.","v":false},{"id":"performance-mode","n":"Performance mode","t":"bool","d":"For PCs that drop frames when you click: predictions get at most 4 ms per click, no extra robustness checks, orbs are only tried with a normal click (no late-click retries), and the drift check and live path view are off. Saves can be a little less precise.","v":false},{"id":"predict-through-portals","n":"Predict through portals","t":"bool","d":"Predictions keep going through mode portals (cube, ship, ball, UFO, wave, robot, spider, swing): the hidden ghost switches mode there instead of the prediction stopping, so clicks right before a portal can be saved. The new mode's floor / ceiling isn't known to the prediction. Teleport portals move the ghost to the orange end, and after a solo portal only P1 goes on (v2.84). After a dual portal P2 appears with P1, upside down, and both go on (v2.85). Teleports with forces / redirects / gravity changes still stop it. Turn off if saves around portals look wrong.","v":true},{"id":"auto-budget","n":"Auto time budget","t":"bool","d":"While the game is already dropping frames (a frame took over twice as long as it should, and over 20 ms), clicks get at most 4 ms of prediction time so it doesn't get worse. Otherwise the time budget setting is used as it is.","v":true},{"id":"menu-theme","n":"Menu theme","t":"string","d":"Accent colour of the in-game menu.","v":"Blue","opts":["Blue","Purple","Pink","Green","Dark"]},{"id":"bind-stage","n":"Key: change stage","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["Six"]},{"id":"bind-menu","n":"Key: open menu","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["Seven"]},{"id":"bind-export","n":"Key: copy console log","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F8"]},{"id":"bind-console","n":"Key: show / hide console","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F9"]},{"id":"bind-path","n":"Key: path view","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F10"]},{"id":"bind-forget","n":"Key: forget this level","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F11"]},{"id":"tps","n":"Physics TPS","t":"int","d":"Physics steps per second in levels. 240 is the normal game. Higher values change the physics, so runs at anything but 240 aren't legit completions. The buffer's windows scale with it automatically.","v":240,"min":240,"max":1000}];
 const KEYN = { Zero: '0', One: '1', Two: '2', Three: '3', Four: '4', Five: '5', Six: '6', Seven: '7', Eight: '8', Nine: '9' };
-const TYPE_PT = { bool: 'liga/desliga', int: 'inteiro', float: 'decimal', keybind: 'tecla', string: 'opção' };
+const TYPE_N = { bool: 'toggle', int: 'integer', float: 'decimal', keybind: 'key', string: 'choice' };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function fmtDefault(s) {
-  if (s.t === 'bool') return s.v ? 'ligado' : 'desligado';
-  if (s.t === 'keybind') return (s.v || []).map(k => KEYN[k] || k).join(', ') || 'nenhuma';
-  if (s.t === 'int' && /ticks/i.test(s.n) && s.v) return s.v + ' (' + (s.v / 4).toString().replace('.', ',') + 'f)';
+  if (s.t === 'bool') return s.v ? 'on' : 'off';
+  if (s.t === 'keybind') return (s.v || []).map(k => KEYN[k] || k).join(', ') || 'none';
+  if (s.t === 'int' && /ticks/i.test(s.n) && s.v) return s.v + ' (' + (s.v / 4) + 'f)';
   return String(s.v);
 }
 let sxAll = false, sxF = 'all';
@@ -1636,8 +1692,7 @@ function hl(text, q) {
   return i < 0 ? t : t.slice(0, i) + '<mark>' + t.slice(i, i + q.length) + '</mark>' + t.slice(i + q.length);
 }
 function renderSettings() {
-  const q = $('#sxQ').value.trim();
-  const ql = q.toLowerCase();
+  const q = $('#sxQ').value.trim(), ql = q.toLowerCase();
   const list = SETTINGS.filter(s => {
     if (sxF === 'bool' && s.t !== 'bool') return false;
     if (sxF === 'num' && !(s.t === 'int' || s.t === 'float')) return false;
@@ -1647,15 +1702,15 @@ function renderSettings() {
   });
   const show = (sxAll || q || sxF !== 'all') ? list : list.slice(0, 10);
   $('#sxList').innerHTML = show.map((s, i) =>
-    '<article class="sx" style="animation-delay:' + Math.min(i, 12) * 25 + 'ms"><div class="sx-top"><b>' + hl(s.n, q) + '</b><span class="sx-type ' + s.t + '">' + TYPE_PT[s.t] + '</span></div><p>' + hl(s.d, q) + '</p><div class="sx-meta"><span>' + hl(s.id, q) + '</span><span>padrão <em>' + esc(fmtDefault(s)) + '</em></span>' +
-    ('min' in s ? '<span>faixa <em>' + s.min + '–' + s.max + '</em></span>' : '') +
-    (s.opts ? '<span>opções <em>' + s.opts.join(' · ') + '</em></span>' : '') +
-    (s.pl ? '<span>só <em>' + s.pl.join(', ') + '</em></span>' : '') + '</div></article>').join('') ||
-    '<p style="color:var(--muted)">Nenhuma configuração com "' + esc(q) + '". Tente outra palavra, como wave ou orb.</p>';
-  $('#sxCount').textContent = list.length + ' de ' + SETTINGS.length;
+    '<article class="sx" style="animation-delay:' + Math.min(i, 12) * 25 + 'ms"><div class="sx-top"><b>' + hl(s.n, q) + '</b><span class="sx-type ' + s.t + '">' + TYPE_N[s.t] + '</span></div><p>' + hl(s.d, q) + '</p><div class="sx-meta"><span>' + hl(s.id, q) + '</span><span>default <em>' + esc(fmtDefault(s)) + '</em></span>' +
+    ('min' in s ? '<span>range <em>' + s.min + '–' + s.max + '</em></span>' : '') +
+    (s.opts ? '<span>options <em>' + s.opts.join(' · ') + '</em></span>' : '') +
+    (s.pl ? '<span>only <em>' + s.pl.join(', ') + '</em></span>' : '') + '</div></article>').join('') ||
+    '<p style="color:var(--muted)">No setting matches "' + esc(q) + '". Try another word, like wave or orb.</p>';
+  $('#sxCount').textContent = list.length + ' of ' + SETTINGS.length;
   const more = $('#sxMore');
   more.hidden = sxAll || !!q || sxF !== 'all' || list.length <= 10;
-  more.textContent = 'Mostrar todas as ' + SETTINGS.length;
+  more.textContent = 'Show all ' + SETTINGS.length;
 }
 $('#sxTotal').textContent = SETTINGS.length;
 $('#sxQ').addEventListener('input', renderSettings);
@@ -1665,8 +1720,25 @@ $$('#sxF button').forEach(b => b.addEventListener('click', () => {
 $('#sxMore').addEventListener('click', () => { sxAll = true; renderSettings(); });
 renderSettings();
 
-/* ---------- download ---------- */
-$('#copySha').addEventListener('click', () => copyText($('#sha').textContent.replace('sha256:', ''), 'SHA-256 copiado'));
+/* ---------- download: show the newest release when GitHub answers ---------- */
+$('#copySha').addEventListener('click', () => copyText($('#sha').textContent.replace('sha256:', ''), 'SHA-256 copied'));
+(() => {
+  let req;
+  try { req = fetch('https://api.github.com/repos/porqueijjmzm1/Click-After-Frames/releases?per_page=10'); } catch (e) { return; }
+  req.then(r => r.ok ? r.json() : Promise.reject()).then(rels => {
+    const hasGeode = r => !r.draft && (r.assets || []).some(a => /\.geode$/.test(a.name));
+    const rel = rels.find(r => hasGeode(r) && !r.prerelease) || rels.find(hasGeode);
+    if (!rel) return;
+    const a = rel.assets.find(x => /\.geode$/.test(x.name));
+    $$('[data-dl]').forEach(el => { el.href = a.browser_download_url; });
+    $$('[data-dl-size]').forEach(el => { el.textContent = (a.size / 1048576).toFixed(1) + ' MB'; });
+    $('#dlName').textContent = a.name;
+    $('#dlSub').textContent = (rel.prerelease ? 'test build' : rel.name || rel.tag_name) + ' · ' + a.size.toLocaleString('en-US') + ' bytes · ' + new Date(rel.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (a.digest) $('#sha').textContent = a.digest;
+    else $('#sha').parentElement.hidden = true;
+    $('#dlPage').href = rel.html_url; $('#dlPage').textContent = 'Release page';
+  }).catch(() => {});
+})();
 
 /* ---------- diagram ruler ---------- */
 (() => {
