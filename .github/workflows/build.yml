@@ -33,6 +33,8 @@ jobs:
     name: Package builds
     runs-on: ubuntu-latest
     needs: ['build']
+    permissions:
+      contents: write
     steps:
       - uses: geode-sdk/build-geode-mod/combine@main
         id: build
@@ -40,3 +42,16 @@ jobs:
         with:
           name: Build Output
           path: ${{ steps.build.outputs.build-output }}
+      # the combined .geode, unzipped, as TESTEBUFFER.geode on the "teste" release
+      # (replaced on every build)
+      - name: Publish TESTEBUFFER.geode
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUT: ${{ steps.build.outputs.build-output }}
+        run: |
+          file=$(find "$OUT" -name '*.geode' | head -n 1)
+          test -n "$file"
+          cp "$file" TESTEBUFFER.geode
+          gh release delete teste --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create teste TESTEBUFFER.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --title "TESTEBUFFER" --notes "Build de teste do commit $GITHUB_SHA"
