@@ -1,0 +1,1686 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Input Buffer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Input Buffer: mod de Geometry Dash (Geode) que segura cliques feitos cedo demais e solta no tick em que eles te salvam.">
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one wide playfield up top, then panels that read like the mod's own menu tabs, on a night-sky ground. */
+:root {
+  --ink: #050918;
+  --deep: #0a1130;
+  --panel: #0d1740;
+  --panel-2: #122059;
+  --line: rgba(130, 172, 255, 0.15);
+  --line-2: rgba(130, 172, 255, 0.3);
+  --fg: #e9efff;
+  --muted: #95a3d1;
+  --blue: #3d8bff;
+  --sky: #9ccfff;
+  --ghost: #5ef0a0;
+  --crash: #ff5470;
+  --path-y: #ffd65a;
+  --f-display: "Orbitron", "Eurostile", "Arial Black", system-ui, sans-serif;
+  --f-body: "Exo 2", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 14px;
+  --gut-l: max(16px, env(safe-area-inset-left, 0px));
+  --gut-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 17px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+img { max-width: 100%; }
+a { color: var(--sky); }
+:focus-visible { outline: 2px solid var(--ghost); outline-offset: 3px; border-radius: 6px; }
+::selection { background: var(--blue); color: #fff; }
+[hidden] { display: none !important; }
+
+#sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.glow-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(60vw 40vw at 85% -10%, rgba(61, 139, 255, 0.18), transparent 70%),
+    radial-gradient(50vw 40vw at -10% 30%, rgba(94, 240, 160, 0.06), transparent 70%);
+}
+main, header.nav, footer { position: relative; z-index: 1; }
+main { overflow-x: clip; }
+
+.wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding-left: var(--gut-l); padding-right: var(--gut-r); }
+
+/* ---------- nav ---------- */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: rgba(5, 9, 24, 0.92); }
+header.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+  backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+  background: rgba(5, 9, 24, 0.72);
+  border-bottom: 1px solid var(--line);
+}
+.nav-in { display: flex; align-items: center; gap: 20px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--fg); font-family: var(--f-display); font-weight: 700; letter-spacing: 0.06em; font-size: 15px; }
+.brand img { width: 34px; height: 34px; border-radius: 9px; transition: transform .4s cubic-bezier(.2, 1.6, .4, 1); }
+.brand:hover img { transform: rotate(-8deg) scale(1.08); }
+.nav-links { display: flex; gap: 4px; margin-left: auto; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; padding: 6px 10px; border-radius: 8px; transition: color .2s, background .2s; }
+.nav-links a:hover { color: var(--fg); background: rgba(130, 172, 255, 0.08); }
+.nav .btn { padding: 8px 14px; font-size: 13px; }
+@media (max-width: 880px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
+
+/* ---------- buttons ---------- */
+.btn {
+  --bg: var(--blue);
+  position: relative; display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--f-display); font-weight: 700; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #fff; text-decoration: none; border: 0; cursor: pointer;
+  padding: 14px 22px; border-radius: 12px;
+  background: linear-gradient(180deg, #5aa2ff, var(--bg) 55%, #2a6be0);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset, 0 8px 28px -8px rgba(61, 139, 255, 0.8), 0 2px 0 #1b4fb3;
+  transition: transform .15s, box-shadow .25s, filter .2s;
+  overflow: hidden; isolation: isolate;
+}
+.btn::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform .7s;
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25) inset, 0 14px 36px -8px rgba(61, 139, 255, 0.95), 0 2px 0 #1b4fb3; }
+.btn:hover::after { transform: translateX(120%); }
+.btn:active { transform: translateY(1px) scale(.98); }
+.btn.ghost { background: rgba(130, 172, 255, 0.06); box-shadow: 0 0 0 1px var(--line-2) inset; color: var(--fg); }
+.btn.ghost:hover { background: rgba(130, 172, 255, 0.12); box-shadow: 0 0 0 1px var(--sky) inset; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn small { font-family: var(--f-mono); font-weight: 400; letter-spacing: 0; text-transform: none; opacity: .8; font-size: 12px; }
+
+/* ---------- hero ---------- */
+.hero { padding-block: 56px 28px; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
+.eyebrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--f-mono); font-size: 12px; color: var(--sky);
+  padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(13, 23, 64, 0.6);
+}
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ghost); box-shadow: 0 0 10px var(--ghost); animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+h1.title {
+  font-family: var(--f-display); font-weight: 900; margin: 0;
+  font-size: clamp(44px, 9.4vw, 112px); line-height: .92; letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+h1.title .ln { display: block; white-space: nowrap; }
+h1.title .ch { display: inline-block; animation: drop .7s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: calc(var(--i) * 45ms + 120ms); }
+h1.title .ln2 .ch {
+  background: linear-gradient(180deg, #ffffff 10%, var(--sky) 55%, var(--blue));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 22px rgba(61, 139, 255, 0.45));
+}
+h1.title .late { animation-delay: 1.05s; animation-name: dropLate; }
+@keyframes drop { from { transform: translateY(-0.6em); opacity: 0; } }
+@keyframes dropLate {
+  0% { transform: translateY(-0.6em); opacity: 0; }
+  70% { transform: translateY(0.04em); opacity: 1; filter: drop-shadow(0 0 26px var(--ghost)); }
+}
+.lead { max-width: 60ch; font-size: clamp(17px, 2vw, 20px); color: #c6d2f5; margin: 22px 0 26px; }
+.lead b { color: var(--fg); font-weight: 600; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 22px; font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.meta span::before { content: "▸ "; color: var(--blue); }
+
+.logo-orb { position: relative; width: clamp(150px, 22vw, 250px); aspect-ratio: 1; max-width: 100%; }
+.logo-orb img { position: relative; z-index: 1; width: 100%; height: 100%; filter: drop-shadow(0 20px 40px rgba(61, 139, 255, 0.45)); animation: bob 5s ease-in-out infinite; }
+.logo-orb::before {
+  content: ""; position: absolute; inset: -18%; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent, rgba(61, 139, 255, 0.5), transparent 30%, rgba(94, 240, 160, 0.35), transparent 60%);
+  filter: blur(26px); animation: spin 9s linear infinite;
+}
+.logo-orb .ring { position: absolute; inset: -9%; border-radius: 50%; border: 1px dashed rgba(156, 207, 255, 0.3); animation: spin 30s linear infinite reverse; }
+@keyframes bob { 50% { transform: translateY(-10px) rotate(-2deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) {
+  .hero { padding-top: 32px; }
+  .hero-grid { grid-template-columns: 1fr; }
+  .logo-orb { display: none; }
+}
+
+/* ---------- playfield ---------- */
+.stage {
+  margin-top: 40px; border-radius: 20px; padding: 10px;
+  background: linear-gradient(180deg, rgba(18, 32, 89, 0.7), rgba(10, 17, 48, 0.85));
+  border: 1px solid var(--line-2);
+  box-shadow: 0 30px 80px -30px rgba(61, 139, 255, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.stage-top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 4px 6px 10px; }
+.chip {
+  font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+  padding: 6px 10px; border-radius: 8px; color: var(--ghost);
+  background: rgba(94, 240, 160, 0.1); border: 1px solid rgba(94, 240, 160, 0.35);
+}
+.chip.you { color: var(--path-y); background: rgba(255, 214, 90, 0.1); border-color: rgba(255, 214, 90, 0.4); }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.stats b { font-family: var(--f-display); color: var(--fg); font-size: 15px; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.stats .s-save b { color: var(--ghost); }
+
+.play { position: relative; height: clamp(280px, 38vw, 400px); border-radius: 14px; overflow: hidden; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; background: #070d26; }
+.play canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  font-family: var(--f-display); font-size: 12px; letter-spacing: 0.16em; font-weight: 700;
+  color: #fff; padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+  background: rgba(5, 9, 24, 0.6); border: 1px solid var(--line-2);
+  animation: hintPulse 2.2s ease-in-out infinite; pointer-events: none;
+}
+@keyframes hintPulse { 50% { box-shadow: 0 0 24px rgba(156, 207, 255, 0.35); border-color: var(--sky); } }
+.console {
+  position: absolute; left: 10px; top: 10px; margin: 0; max-width: min(460px, calc(100% - 110px));
+  font-family: var(--f-mono); font-size: 11px; line-height: 1.5; color: #cfe0ff;
+  background: rgba(3, 6, 18, 0.62); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 9px; pointer-events: none; white-space: pre; overflow: hidden;
+}
+.console .ok { color: var(--ghost); } .console .bad { color: var(--crash); } .console .mid { color: var(--path-y); }
+.wm { position: absolute; right: 12px; top: 12px; font-family: var(--f-display); font-size: 10px; letter-spacing: .1em; color: rgba(233, 239, 255, 0.45); pointer-events: none; }
+@media (max-width: 560px) { .console { font-size: 9.5px; line-height: 1.45; } .hint { font-size: 10px; letter-spacing: .1em; } }
+.draw-a { animation: march 1.2s linear infinite; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 4px 2px; }
+.seg { display: inline-flex; padding: 3px; border-radius: 10px; background: rgba(5, 9, 24, 0.6); border: 1px solid var(--line); }
+.seg button, .tbtn {
+  font-family: var(--f-body); font-weight: 600; font-size: 13px; color: var(--muted);
+  border: 0; background: transparent; padding: 7px 11px; border-radius: 8px; cursor: pointer; transition: color .2s, background .2s;
+}
+.seg button[aria-pressed="true"] { background: var(--blue); color: #fff; box-shadow: 0 4px 14px -4px rgba(61, 139, 255, 0.8); }
+.seg button[data-v="train"][aria-pressed="true"] { background: #b88a1c; box-shadow: none; }
+.seg button[data-v="off"][aria-pressed="true"] { background: #7a2335; box-shadow: none; }
+.tbtn { border: 1px solid var(--line); background: rgba(5, 9, 24, 0.6); display: inline-flex; gap: 7px; align-items: center; }
+.tbtn:hover { color: var(--fg); border-color: var(--line-2); }
+.tbtn[aria-pressed="true"] { color: var(--fg); border-color: rgba(94, 240, 160, 0.5); }
+.tbtn[aria-pressed="true"] .led { background: var(--ghost); box-shadow: 0 0 8px var(--ghost); }
+.led { width: 7px; height: 7px; border-radius: 50%; background: #3a4570; transition: .2s; }
+.kbd { font-family: var(--f-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--muted); }
+.tool-sep { flex: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 6px 2px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 3px dotted; vertical-align: middle; margin-right: 6px; }
+
+/* ---------- sections ---------- */
+section.block { padding-block: 84px 20px; }
+.sec-head { display: grid; gap: 12px; margin-bottom: 36px; max-width: 720px; }
+.kicker { font-family: var(--f-mono); font-size: 13px; color: var(--ghost); letter-spacing: 0.04em; }
+h2 { font-family: var(--f-display); font-weight: 900; font-size: clamp(28px, 4.4vw, 46px); line-height: 1.05; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+h3 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: .04em; margin: 0; text-wrap: balance; }
+.sec-head p { margin: 0; color: #c0cbee; max-width: 62ch; }
+
+/* reveal: elements are visible by default; JS only hides those below the fold */
+.rv.pre { opacity: 0; transform: translateY(26px); }
+.rv { transition: opacity .8s ease, transform .8s cubic-bezier(.2, .8, .2, 1); transition-delay: var(--d, 0ms); }
+
+/* how it works */
+.diagram { border-radius: var(--r); border: 1px solid var(--line); background: rgba(10, 17, 48, 0.75); overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.diagram .draw { stroke-dasharray: 2 7; animation: march 1.2s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -18; } }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.step { padding: 20px; border-radius: var(--r); border: 1px solid var(--line); background: rgba(13, 23, 64, 0.5); display: grid; gap: 8px; align-content: start; }
+.step .n { font-family: var(--f-display); font-weight: 900; font-size: 13px; color: var(--blue); letter-spacing: .12em; }
+.step p { margin: 0; color: #c0cbee; font-size: 15px; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.fact { font-family: var(--f-mono); font-size: 13px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--line-2); color: var(--muted); }
+.fact b { color: var(--sky); font-weight: 600; }
+@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+
+/* modes */
+.modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.mode {
+  position: relative; padding: 18px; border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(18, 32, 89, 0.55), rgba(10, 17, 48, 0.6));
+  border: 1px solid var(--line); display: grid; gap: 10px; align-content: start;
+  transition: transform .3s cubic-bezier(.2, .8, .2, 1), border-color .3s, box-shadow .3s;
+  transform-style: preserve-3d;
+}
+.mode:hover { border-color: var(--line-2); box-shadow: 0 20px 50px -24px rgba(61, 139, 255, 0.7); }
+.mode .ico { width: 56px; height: 56px; }
+.mode .ico svg { width: 100%; height: 100%; overflow: visible; }
+.mode p { margin: 0; font-size: 14.5px; color: #c0cbee; }
+.mode code { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.mode:hover .ico .spin { animation: spin 1s cubic-bezier(.5, 0, .5, 1); }
+.mode:hover .ico .hop { animation: hop .6s cubic-bezier(.3, .8, .4, 1); }
+.mode:hover .ico .zig { animation: zig 1s linear infinite; }
+.mode:hover .ico .flap { animation: flap .5s ease-out 2; }
+@keyframes hop { 50% { transform: translateY(-9px); } }
+@keyframes zig { 25% { transform: translate(4px, -6px); } 75% { transform: translate(-4px, 6px); } }
+@keyframes flap { 40% { transform: translateY(-7px); } }
+.ico svg * { transform-box: fill-box; transform-origin: center; }
+@media (max-width: 980px) { .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .modes { grid-template-columns: 1fr; } }
+
+/* features bento */
+.bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.feat {
+  position: relative; overflow: hidden; padding: 20px; border-radius: var(--r);
+  border: 1px solid var(--line); background: rgba(13, 23, 64, 0.5);
+  display: grid; gap: 8px; align-content: start; grid-column: span 2;
+}
+.feat.wide { grid-column: span 3; }
+.feat p { margin: 0; color: #c0cbee; font-size: 15px; }
+.feat .tag { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.feat::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(156, 207, 255, 0.12), transparent 60%);
+}
+.feat:hover::before { opacity: 1; }
+.viz { height: 74px; margin: 2px 0 6px; position: relative; }
+.viz svg { width: 100%; height: 100%; display: block; }
+.heat { position: absolute; left: 0; right: 0; top: 30px; height: 12px; border-radius: 6px; background: rgba(156, 207, 255, 0.12); overflow: hidden; }
+.heat .fill { position: absolute; inset: 0 auto 0 0; width: 64%; background: linear-gradient(90deg, var(--blue), var(--sky)); border-radius: 6px; animation: prog 5s ease-in-out infinite; }
+.heat .m { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--crash); box-shadow: 0 0 8px var(--crash); }
+@keyframes prog { 0% { width: 4%; } 80%, 100% { width: 92%; } }
+.orb { position: absolute; left: 55%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: radial-gradient(circle, #fff6a8 0 22%, #ffd65a 23% 46%, transparent 48%); box-shadow: 0 0 22px rgba(255, 214, 90, 0.55); }
+.orb::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid rgba(255, 214, 90, 0.7); animation: ringOut 1.6s ease-out infinite; }
+@keyframes ringOut { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+.dots { position: absolute; left: 8%; top: 50%; display: flex; gap: 7px; transform: translateY(-50%); }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--ghost); opacity: .25; animation: dotRun 1.6s infinite; animation-delay: calc(var(--k) * 120ms); }
+@keyframes dotRun { 40% { opacity: 1; transform: scale(1.3); box-shadow: 0 0 10px var(--ghost); } }
+.hintbox { font-family: var(--f-mono); font-size: 13px; color: var(--path-y); border: 1px solid rgba(255, 214, 90, 0.4); border-radius: 8px; padding: 6px 10px; display: inline-block; margin-top: 14px; animation: blink 2.4s steps(1) infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.flashdemo { position: absolute; inset: 0; border-radius: 10px; background: rgba(94, 240, 160, 0.0); border: 1px solid var(--line); animation: flashG 2.4s infinite; display: grid; place-items: center; font-family: var(--f-display); font-weight: 900; color: var(--ghost); letter-spacing: .1em; }
+@keyframes flashG { 0%, 70% { background: rgba(94, 240, 160, 0); } 74% { background: rgba(94, 240, 160, 0.35); } 100% { background: rgba(94, 240, 160, 0); } }
+@media (max-width: 980px) { .feat, .feat.wide { grid-column: span 3; } }
+@media (max-width: 620px) { .bento { grid-template-columns: 1fr; } .feat, .feat.wide { grid-column: auto; } }
+
+/* keys */
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.key { display: grid; gap: 10px; justify-items: start; padding: 14px; border-radius: var(--r); border: 1px solid var(--line); background: rgba(13, 23, 64, 0.45); cursor: pointer; text-align: left; color: var(--fg); font: inherit; transition: border-color .2s, transform .2s; }
+.key:hover { border-color: var(--line-2); transform: translateY(-2px); }
+.cap {
+  font-family: var(--f-display); font-weight: 700; font-size: 18px; min-width: 54px; height: 50px; padding: 0 12px;
+  display: grid; place-items: center; border-radius: 10px; color: #fff;
+  background: linear-gradient(180deg, #24346f, #17224f);
+  box-shadow: 0 5px 0 #0a1233, 0 0 0 1px rgba(156, 207, 255, 0.25) inset, 0 10px 20px -6px rgba(0, 0, 0, .6);
+  transition: transform .08s, box-shadow .08s, background .2s;
+}
+.key.hit .cap { transform: translateY(4px); box-shadow: 0 1px 0 #0a1233, 0 0 0 1px var(--ghost) inset, 0 0 22px rgba(94, 240, 160, 0.6); background: linear-gradient(180deg, #2d4b8c, #1d2f68); }
+.key b { font-weight: 600; font-size: 15px; }
+.key span { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+
+/* in-game menu mock */
+.menu-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: center; }
+@media (max-width: 900px) { .menu-grid { grid-template-columns: 1fr; } }
+.menu {
+  --m-acc: #a477ff; --m-acc-2: #6c3fe0; --m-bg: #0c0820; --m-bg-2: #160f35; --m-text: #f0eaff; --m-muted: #a99ccc;
+  position: relative; border-radius: 18px; overflow: hidden; color: var(--m-text);
+  background: radial-gradient(120% 90% at 80% 0%, var(--m-bg-2), var(--m-bg) 70%);
+  border: 2px solid color-mix(in srgb, var(--m-acc) 55%, transparent);
+  box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--m-acc) 70%, transparent);
+  transition: border-color .4s, box-shadow .4s;
+  isolation: isolate;
+}
+.menu[data-mt="pink"] { --m-acc: #ff7ac8; --m-acc-2: #d93f97; --m-bg: #1a0716; --m-bg-2: #34102b; --m-text: #ffeef8; --m-muted: #cf9fbd; }
+.menu[data-mt="blue"] { --m-acc: #4aa3ff; --m-acc-2: #2364d6; --m-bg: #050d22; --m-bg-2: #0c1d45; --m-text: #eaf3ff; --m-muted: #93aed6; }
+.menu[data-mt="green"] { --m-acc: #55e39a; --m-acc-2: #1f9d5f; --m-bg: #04140d; --m-bg-2: #0a2a1b; --m-text: #eafff3; --m-muted: #8fc9a9; }
+.menu[data-mt="dark"] { --m-acc: #c9d2e8; --m-acc-2: #6f7a96; --m-bg: #07080c; --m-bg-2: #12141c; --m-text: #f1f3f8; --m-muted: #9aa1b3; }
+.menu .stars, .menu .stars::before, .menu .stars::after {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 33% 72%, #fff, transparent),
+    radial-gradient(1.6px 1.6px at 58% 26%, #fff, transparent), radial-gradient(1px 1px at 76% 64%, #fff, transparent),
+    radial-gradient(1.2px 1.2px at 90% 12%, #fff, transparent), radial-gradient(1px 1px at 22% 90%, #fff, transparent),
+    radial-gradient(1.3px 1.3px at 47% 48%, #fff, transparent), radial-gradient(1px 1px at 66% 88%, #fff, transparent);
+}
+.menu .stars::before { content: ""; transform: translate(9%, 13%) scale(1.2); animation: twinkle 3.4s ease-in-out infinite; }
+.menu .stars::after { content: ""; transform: translate(-14%, 7%) rotate(9deg); animation: twinkle 4.2s ease-in-out infinite reverse; }
+@keyframes twinkle { 50% { opacity: .25; } }
+.menu .shoot { position: absolute; top: 10%; left: -20%; width: 120px; height: 2px; z-index: -1; background: linear-gradient(90deg, transparent, #fff); transform: rotate(-18deg); animation: shoot 6s ease-in infinite; opacity: 0; }
+@keyframes shoot { 0%, 80% { opacity: 0; transform: translate(0, 0) rotate(-18deg); } 82% { opacity: 1; } 100% { opacity: 0; transform: translate(560px, -150px) rotate(-18deg); } }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 8px; cursor: grab; }
+.m-head img { width: 28px; height: 28px; border-radius: 7px; }
+.m-head b { font-family: "Orbitron", var(--f-display); font-size: 15px; letter-spacing: .06em; }
+.m-head .x { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--m-acc) 25%, transparent); color: var(--m-text); font-weight: 700; font-size: 14px; }
+.m-tabs { display: flex; gap: 4px; padding: 6px 12px; overflow-x: auto; scrollbar-width: none; }
+.m-tabs button {
+  font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--m-muted); background: transparent; border: 1px solid transparent; padding: 8px 11px; border-radius: 9px; cursor: pointer; white-space: nowrap; transition: .2s;
+}
+.m-tabs button[aria-selected="true"] { color: var(--m-text); background: color-mix(in srgb, var(--m-acc) 22%, transparent); border-color: color-mix(in srgb, var(--m-acc) 55%, transparent); }
+.m-body { padding: 8px 14px 16px; min-height: 290px; }
+.m-row { display: flex; align-items: center; gap: 12px; padding: 10px 6px; border-bottom: 1px solid color-mix(in srgb, var(--m-acc) 14%, transparent); font-size: 14.5px; }
+.m-row:last-child { border-bottom: 0; }
+.m-row .lbl { flex: 1; min-width: 0; }
+.m-row .lbl small { display: block; color: var(--m-muted); font-size: 12px; line-height: 1.35; }
+.sw { position: relative; width: 44px; height: 24px; border-radius: 999px; border: 0; cursor: pointer; flex: none; background: color-mix(in srgb, var(--m-muted) 30%, transparent); transition: background .25s; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .3s cubic-bezier(.2, 1.4, .4, 1); box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
+.sw[aria-checked="true"] { background: var(--m-acc); box-shadow: 0 0 14px color-mix(in srgb, var(--m-acc) 60%, transparent); }
+.sw[aria-checked="true"]::after { transform: translateX(20px); }
+.m-btn { font-family: var(--f-body); font-weight: 600; font-size: 13px; color: var(--m-text); background: color-mix(in srgb, var(--m-acc) 22%, transparent); border: 1px solid color-mix(in srgb, var(--m-acc) 50%, transparent); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.m-btn:hover { background: color-mix(in srgb, var(--m-acc) 35%, transparent); }
+.stepper { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: 14px; }
+.stepper output { min-width: 42px; text-align: center; }
+.m-row input[type="range"] { width: min(160px, 40vw); accent-color: var(--m-acc); }
+.m-row .val { font-family: var(--f-mono); font-size: 12px; width: 34px; text-align: right; color: var(--m-muted); }
+.m-ico { width: 22px; height: 22px; flex: none; }
+.themes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.theme { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: 999px; border: 1px solid var(--line); background: rgba(13, 23, 64, 0.5); color: var(--fg); cursor: pointer; font: 600 13px var(--f-body); transition: .2s; }
+.theme i { width: 18px; height: 18px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.theme[aria-pressed="true"] { border-color: var(--c); background: rgba(255, 255, 255, 0.06); }
+.menu-copy p { color: #c0cbee; margin: 0 0 12px; }
+.menu-copy ul { margin: 0; padding-left: 18px; color: #c0cbee; display: grid; gap: 6px; }
+.pop { animation: popIn .5s cubic-bezier(.2, 1.5, .4, 1); }
+@keyframes popIn { 0% { transform: scale(.96); } 60% { transform: scale(1.015); } }
+
+/* settings explorer */
+.sx-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+.sx-bar input {
+  flex: 1 1 260px; min-width: 0; font: 500 15px var(--f-body); color: var(--fg);
+  padding: 12px 14px 12px 40px; border-radius: 12px; border: 1px solid var(--line-2);
+  background: rgba(5, 9, 24, 0.7) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%239ccfff' stroke-width='2'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3Cpath d='m13 13 4 4'/%3E%3C/svg%3E") 13px 50% no-repeat;
+}
+.sx-bar input:focus { outline: none; border-color: var(--sky); box-shadow: 0 0 0 3px rgba(156, 207, 255, 0.15); }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchips button { font: 600 13px var(--f-body); color: var(--muted); padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; }
+.fchips button[aria-pressed="true"] { color: #fff; background: var(--blue); border-color: var(--blue); }
+.sx-count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.sx-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .sx-list { grid-template-columns: 1fr; } }
+.sx {
+  padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: rgba(10, 17, 48, 0.7);
+  display: grid; gap: 8px; align-content: start; min-width: 0; animation: fadeUp .4s ease both;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }
+.sx-top { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.sx-top b { font-weight: 600; font-size: 15px; line-height: 1.35; }
+.sx-type { flex: none; font-family: var(--f-mono); font-size: 11px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--sky); }
+.sx-type.bool { color: var(--ghost); border-color: rgba(94, 240, 160, 0.35); }
+.sx-type.keybind { color: var(--path-y); border-color: rgba(255, 214, 90, 0.35); }
+.sx p { margin: 0; color: #b3c0e6; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.sx-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.sx-meta em { font-style: normal; color: var(--fg); }
+.sx-more { margin-top: 18px; display: flex; justify-content: center; }
+mark { background: rgba(255, 214, 90, 0.3); color: inherit; border-radius: 3px; }
+
+/* install */
+.install { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 900px) { .install { grid-template-columns: 1fr; } }
+ol.inst { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: s; }
+ol.inst li { counter-increment: s; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 16px; border-radius: var(--r); border: 1px solid var(--line); background: rgba(13, 23, 64, 0.45); }
+ol.inst li::before { content: counter(s); font-family: var(--f-display); font-weight: 900; font-size: 18px; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(180deg, #2a4b9a, #172a63); color: #fff; box-shadow: 0 0 0 1px var(--line-2) inset; }
+ol.inst b { display: block; font-size: 16px; margin-bottom: 2px; }
+ol.inst p { margin: 0; color: #b3c0e6; font-size: 14.5px; }
+code.path { font-family: var(--f-mono); font-size: 12.5px; color: var(--sky); background: rgba(5, 9, 24, 0.7); padding: 2px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.dl {
+  position: relative; overflow: hidden; padding: 26px; border-radius: 20px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(160deg, rgba(25, 48, 128, 0.85), rgba(10, 17, 48, 0.95) 60%);
+  display: grid; gap: 16px;
+}
+.dl::before { content: ""; position: absolute; width: 360px; height: 360px; right: -140px; top: -160px; border-radius: 50%; background: radial-gradient(circle, rgba(94, 240, 160, 0.22), transparent 65%); animation: bob 7s ease-in-out infinite; pointer-events: none; }
+.file { display: flex; align-items: center; gap: 14px; }
+.file img { width: 56px; height: 56px; border-radius: 12px; }
+.file b { font-family: var(--f-display); font-size: 17px; letter-spacing: .03em; overflow-wrap: anywhere; }
+.file small { display: block; font-family: var(--f-mono); color: var(--muted); font-size: 12px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.sha { display: flex; gap: 8px; align-items: center; }
+.sha code { flex: 1; min-width: 0; font-family: var(--f-mono); font-size: 11.5px; color: var(--sky); overflow-wrap: anywhere; }
+.copy { font: 600 12px var(--f-body); color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; cursor: pointer; flex: none; }
+.warn { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; background: rgba(255, 84, 112, 0.08); border: 1px solid rgba(255, 84, 112, 0.35); font-size: 14px; color: #ffd5dc; }
+.warn svg { flex: none; width: 20px; height: 20px; color: var(--crash); margin-top: 2px; }
+
+/* changelog */
+.log { position: relative; display: grid; gap: 4px; padding-left: 28px; }
+.log::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(180deg, var(--ghost), var(--blue) 40%, rgba(61, 139, 255, 0.1)); border-radius: 2px; }
+.log li { list-style: none; position: relative; padding: 10px 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 14px; align-items: baseline; }
+.log li::before { content: ""; position: absolute; left: -26px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 2px solid var(--blue); box-shadow: 0 0 10px rgba(61, 139, 255, 0.6); }
+.log li:first-child::before { border-color: var(--ghost); box-shadow: 0 0 12px var(--ghost); }
+.log .v { font-family: var(--f-display); font-weight: 700; font-size: 14px; color: var(--sky); }
+.log p { margin: 0; color: #c0cbee; font-size: 15px; }
+.log ul { margin: 0; padding: 0; }
+@media (max-width: 520px) { .log li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* faq */
+.faq { display: grid; gap: 10px; max-width: 860px; }
+details { border-radius: 12px; border: 1px solid var(--line); background: rgba(13, 23, 64, 0.45); transition: border-color .2s, background .2s; }
+details[open] { border-color: var(--line-2); background: rgba(18, 32, 89, 0.5); }
+summary { cursor: pointer; list-style: none; padding: 16px 18px; font-weight: 600; font-size: 16px; display: flex; gap: 12px; align-items: center; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; margin-left: auto; font-family: var(--f-display); font-size: 20px; color: var(--sky); transition: transform .3s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { margin: 0; padding: 0 18px 18px; color: #c0cbee; font-size: 15px; }
+details[open] p { animation: fadeUp .35s ease; }
+
+footer { padding-block: 60px 40px; margin-top: 80px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.foot { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; align-items: center; }
+.foot a { color: var(--sky); }
+
+/* buffered cursor trail */
+.trail { position: fixed; left: 0; top: 0; width: 8px; height: 8px; margin: -4px; border-radius: 50%; pointer-events: none; z-index: 50; background: var(--ghost); box-shadow: 0 0 10px var(--ghost); opacity: 0; transition: opacity .3s; }
+body.trail-on .trail { opacity: var(--o); }
+
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, calc(100% + 60px)); visibility: hidden; z-index: 60; font: 600 14px var(--f-body); padding: 11px 16px; border-radius: 12px; background: #13235e; border: 1px solid var(--line-2); color: var(--fg); box-shadow: 0 16px 40px -10px rgba(0, 0, 0, .7); transition: transform .4s cubic-bezier(.2, 1.4, .4, 1); max-width: calc(100% - 32px); }
+.toast.show { transform: translate(-50%, 0); visibility: visible; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  .rv.pre { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div class="glow-bg" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><img src="logo.png" alt="" width="34" height="34">INPUT BUFFER</a>
+    <nav class="nav-links" aria-label="Seções">
+      <a href="#como">Como funciona</a>
+      <a href="#modos">Modos</a>
+      <a href="#recursos">Recursos</a>
+      <a href="#menu">Menu</a>
+      <a href="#config">Configurações</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn" href="#baixar">Baixar</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <div class="eyebrow">
+            <span class="pill"><span class="dot"></span>v2.101.0 · build de teste</span>
+            <span class="pill">Geometry Dash · Geode</span>
+          </div>
+          <h1 class="title" aria-label="Input Buffer">
+            <span class="ln" aria-hidden="true" data-split>INPUT</span>
+            <span class="ln ln2" aria-hidden="true" data-split data-late="0">BUFFER</span>
+          </h1>
+          <p class="lead">Clicou alguns frames cedo demais? O Input Buffer <b>simula o seu pulo antes de ele acontecer</b>. Se aquele clique fosse te matar, o mod segura ele e solta no tick exato em que ele te salva.</p>
+          <div class="cta">
+            <a class="btn" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/download/teste/TESTEBUFFER.geode">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+              Baixar .geode <small>1,7 MB</small>
+            </a>
+            <a class="btn ghost" href="#demo">Testar no navegador</a>
+          </div>
+          <div class="meta"><span>GD 2.2081</span><span>Geode 5.11.2</span><span>Windows · Android · macOS</span></div>
+        </div>
+        <div class="logo-orb" aria-hidden="true"><span class="ring"></span><img src="logo.png" alt="" width="250" height="250"></div>
+      </div>
+
+      <div class="stage" id="demo">
+        <div class="stage-top">
+          <span class="chip" id="modeChip">DEMO AUTOMÁTICA</span>
+          <div class="stats" aria-live="off">
+            <span class="s-save">Cliques salvos<b id="stSaves">0</b></span>
+            <span>Tentativa<b id="stAtt">1</b></span>
+            <span>Distância<b id="stDist">0</b></span>
+            <span>Recorde<b id="stBest">0</b></span>
+          </div>
+        </div>
+        <div class="play" id="play" role="application" aria-label="Demo jogável: toque ou aperte Espaço para pular">
+          <canvas id="game"></canvas>
+          <div class="hint" id="hint">TOQUE OU APERTE ESPAÇO PARA JOGAR</div>
+          <pre class="console" id="console" aria-hidden="true"></pre>
+          <div class="wm" id="wm">CBF | 8f</div>
+        </div>
+        <div class="toolbar">
+          <div class="seg" role="group" aria-label="Buffer">
+            <button type="button" data-v="on" aria-pressed="true">Buffer ligado</button>
+            <button type="button" data-v="train" aria-pressed="false">Treino</button>
+            <button type="button" data-v="off" aria-pressed="false">Desligado</button>
+          </div>
+          <button type="button" class="tbtn" id="bStage" title="Atraso máximo (tecla 6)">Atraso máx. <b id="stageVal">8f</b> <span class="kbd">6</span></button>
+          <button type="button" class="tbtn" id="bPath" aria-pressed="true"><span class="led"></span>Caminho <span class="kbd">F10</span></button>
+          <button type="button" class="tbtn" id="bLive" aria-pressed="false"><span class="led"></span>Caminho ao vivo</button>
+          <button type="button" class="tbtn" id="bFlash" aria-pressed="true"><span class="led"></span>Flash</button>
+          <button type="button" class="tbtn" id="bDing" aria-pressed="false"><span class="led"></span>Ding</button>
+          <span class="tool-sep"></span>
+          <button type="button" class="tbtn" id="bDemo" hidden>Voltar à demo</button>
+        </div>
+        <div class="legend">
+          <span><i style="color:var(--crash)"></i>o que o clique faria agora</span>
+          <span><i style="color:var(--ghost)"></i>o que o jogo recebe</span>
+          <span id="lgLive" hidden><i style="color:#6aa8ff"></i>não fazer nada · <i style="color:var(--path-y);margin-left:6px"></i>clicar agora</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="como">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">Como funciona</span>
+        <h2>Um fantasma pula antes de você</h2>
+        <p>A cada clique o mod roda cópias invisíveis do seu ícone pela fase, tick por tick. Se o clique de agora bate em algo, ele testa o mesmo clique alguns ticks depois e usa o menor atraso que aterrissa em segurança.</p>
+      </div>
+      <div class="diagram rv">
+        <svg viewBox="0 0 960 300" role="img" aria-label="Diagrama: o clique em t0 bate no espinho; o mesmo clique atrasado 12 ticks passa por cima.">
+          <defs>
+            <linearGradient id="gSpike" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a2b6b"/><stop offset="1" stop-color="#0a1130"/></linearGradient>
+          </defs>
+          <g font-family="JetBrains Mono, monospace" font-size="12" fill="#95a3d1">
+            <line x1="60" y1="250" x2="920" y2="250" stroke="#9ccfff" stroke-width="2"/>
+            <g id="ruler"></g>
+            <text x="60" y="290">ticks (240 por segundo)</text>
+          </g>
+          <!-- spikes -->
+          <g stroke="#bfe0ff" stroke-width="2" fill="url(#gSpike)">
+            <path d="M560 250 L590 196 L620 250 Z"/>
+            <path d="M620 250 L650 196 L680 250 Z"/>
+            <path d="M680 250 L710 196 L740 250 Z"/>
+          </g>
+          <!-- player -->
+          <rect x="190" y="214" width="36" height="36" rx="3" fill="#3d8bff" stroke="#dff0ff" stroke-width="2"/>
+          <rect x="200" y="224" width="16" height="16" fill="#0a1236"/>
+          <!-- click marker -->
+          <g>
+            <line x1="226" y1="40" x2="226" y2="250" stroke="#9ccfff" stroke-dasharray="3 5"/>
+            <text x="232" y="54" font-family="Exo 2, sans-serif" font-size="14" fill="#e9efff" font-weight="600">seu clique (t0)</text>
+          </g>
+          <!-- red path -->
+          <path class="draw" d="M208 230 Q 400 -10 590 214" fill="none" stroke="#ff5470" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="590" cy="214" r="9" fill="#ff5470"/>
+          <text x="410" y="118" font-family="Exo 2, sans-serif" font-size="14" fill="#ff8aa0" font-weight="600">pular agora: bate em t78</text>
+          <!-- delay marker -->
+          <g>
+            <line x1="298" y1="70" x2="298" y2="250" stroke="#5ef0a0" stroke-dasharray="3 5"/>
+            <circle cx="298" cy="232" r="7" fill="#fff"/>
+            <text x="304" y="84" font-family="Exo 2, sans-serif" font-size="14" fill="#5ef0a0" font-weight="600">solta em t12 (+3 frames)</text>
+          </g>
+          <!-- green path -->
+          <path class="draw" d="M298 232 Q 540 -40 790 232" fill="none" stroke="#5ef0a0" stroke-width="5" stroke-linecap="round"/>
+          <rect x="790" y="214" width="36" height="36" rx="3" fill="none" stroke="#5ef0a0" stroke-width="2" stroke-dasharray="4 4"/>
+          <text x="768" y="200" font-family="Exo 2, sans-serif" font-size="14" fill="#5ef0a0" font-weight="600">aterrissa</text>
+        </svg>
+      </div>
+      <div class="steps">
+        <div class="step rv" style="--d:0ms"><span class="n">1 · VOCÊ CLICA</span><h3>Cedo demais</h3><p>O mod pega o clique antes do jogo. Nada muda na tela ainda.</p></div>
+        <div class="step rv" style="--d:90ms"><span class="n">2 · O FANTASMA PREVÊ</span><h3>Até 130 ticks à frente</h3><p>Uma cópia escondida do ícone pula agora e depois com 1, 2, 3… ticks de atraso, usando orbs, pads e portais pelo caminho.</p></div>
+        <div class="step rv" style="--d:180ms"><span class="n">3 · O JOGO RECEBE</span><h3>O clique no tick certo</h3><p>Se pular agora já era seguro, o clique passa direto. Se nenhum atraso salva, ele também passa direto.</p></div>
+      </div>
+      <div class="facts rv">
+        <span class="fact"><b>4 ticks</b> = 1 frame a 60 fps</span>
+        <span class="fact">física a <b>240</b> ticks/s</span>
+        <span class="fact">atraso máx. do estágio custom: <b>40 ticks</b></span>
+        <span class="fact">orçamento por clique: <b>8 ms</b></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="modos">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">8 modos de jogo</span>
+        <h2>Cada modo tem a sua regra</h2>
+        <p>Um pulo de cubo não é igual a um zigue-zague de onda. O buffer decide o que é um clique "seguro" de um jeito diferente para cada forma.</p>
+      </div>
+      <div class="modes" id="modesGrid"></div>
+    </div>
+  </section>
+
+  <section class="block" id="recursos">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">Recursos</span>
+        <h2>Mais do que segurar clique</h2>
+        <p>Previsão que entende orbs e triggers, memória por fase, ferramentas para ver o que o mod está fazendo e opções para quem sente lag.</p>
+      </div>
+      <div class="bento">
+        <article class="feat wide rv">
+          <div class="viz"><svg viewBox="0 0 400 74" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="66" x2="400" y2="66" stroke="#9ccfff" stroke-opacity=".5"/>
+            <path d="M20 60 Q 120 -30 230 58" fill="none" stroke="#ff5470" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round" class="draw-a"/>
+            <path d="M70 60 Q 190 -30 300 60" fill="none" stroke="#5ef0a0" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round" class="draw-a"/>
+            <circle cx="230" cy="58" r="5" fill="#ff5470"/><circle cx="70" cy="60" r="4" fill="#fff"/>
+            <path d="M226 66 l12 -18 l12 18z" fill="#0a1130" stroke="#bfe0ff"/>
+          </svg></div>
+          <h3>Path view</h3>
+          <p>Aperte F10 e veja a previsão desenhada na fase: vermelho é o que o clique faria agora, verde é o que o jogo recebe, ponto branco é onde o clique atrasado dispara. No modo ao vivo, azul é não fazer nada e amarelo é clicar agora.</p>
+          <span class="tag">show-path · F10</span>
+        </article>
+        <article class="feat wide rv" style="--d:80ms">
+          <div class="viz"><div class="heat"><div class="fill"></div><span class="m" style="left:22%"></span><span class="m" style="left:47%;opacity:.6"></span><span class="m" style="left:48.5%"></span><span class="m" style="left:71%;opacity:.45"></span></div></div>
+          <h3>Memória de fase e mapa de mortes</h3>
+          <p>O mod lembra, por fase e por trecho, quais atrasos funcionaram e onde você morre. Atrasos que deram certo são testados primeiro, e a barra de progresso ganha marcas vermelhas onde você mais cai.</p>
+          <span class="tag">level-memory · death-heatmap · F11 esquece a fase</span>
+        </article>
+        <article class="feat rv">
+          <div class="viz"><div class="dots"><i style="--k:0"></i><i style="--k:1"></i><i style="--k:2"></i><i style="--k:3"></i><i style="--k:4"></i></div><div class="orb"></div></div>
+          <h3>Alinhamento de orb</h3>
+          <p>Apertou até 4 frames antes de chegar no orb? O clique espera você entrar nele e acerta.</p>
+          <span class="tag">orb-align · orb-timing</span>
+        </article>
+        <article class="feat rv" style="--d:60ms">
+          <div class="viz"><span class="hintbox">click 0.5f early</span></div>
+          <h3>Modo treino</h3>
+          <p>O mod prevê tudo mas não atrasa nada. Só mostra quantos frames cedo você clicou, para você aprender o timing.</p>
+          <span class="tag">training-mode</span>
+        </article>
+        <article class="feat rv" style="--d:120ms">
+          <div class="viz"><div class="flashdemo">SALVO</div></div>
+          <h3>Flash e ding</h3>
+          <p>A tela pisca verde ou toca um ding a cada clique salvo, para você saber quando o buffer agiu.</p>
+          <span class="tag">save-flash · save-ding</span>
+        </article>
+        <article class="feat rv">
+          <h3>Prevê triggers de movimento</h3>
+          <p>Espinhos, blocos e orbs que um move ou rotate trigger vai mexer são previstos do jeito que o jogo vai mexer, com easing e duração.</p>
+          <span class="tag">predict-move-triggers</span>
+        </article>
+        <article class="feat rv" style="--d:60ms">
+          <h3>Auto-release e auto-click</h3>
+          <p>Na onda, no robô e no dash orb, o mod pode soltar por você quando segurar mais bateria. No treino, pode até clicar quando ficar parado mata.</p>
+          <span class="tag">wave-auto-release · auto-click</span>
+        </article>
+        <article class="feat rv" style="--d:120ms">
+          <h3>Click Between Frames</h3>
+          <p>Com o CBF, o clique cai no meio de um tick. A previsão começa desse momento exato.</p>
+          <span class="tag">cbf-sync</span>
+        </article>
+        <article class="feat rv">
+          <h3>Saves robustos</h3>
+          <p>Antes de usar um save, o mod testa ele com você meio tick à frente e atrás. Saves que só funcionam no pixel exato são trocados.</p>
+          <span class="tag">robust-saves</span>
+        </article>
+        <article class="feat rv" style="--d:60ms">
+          <h3>Baixa latência e desempenho</h3>
+          <p>Sente o buffer como lag? Limite o atraso a 1 frame. PC caindo de FPS ao clicar? Cada clique fica com no máximo 4 ms.</p>
+          <span class="tag">low-latency · performance-mode · auto-budget</span>
+        </article>
+        <article class="feat rv" style="--d:120ms">
+          <h3>Planeja dois cliques</h3>
+          <p>Quando a batida vem de algo que o seu próximo clique resolveria, depois de um orb ou de um portal, o fantasma tenta mais um clique.</p>
+          <span class="tag">plan-next-click · predict-through-portals</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="teclas">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">Atalhos</span>
+        <h2>Tudo no teclado</h2>
+        <p>Teclas padrão dentro de uma fase. Dá para trocar nas configurações do mod ou no popup de keybinds do Geode. Aqui no site, 6, 7, F8, F9 e F10 também funcionam na demo.</p>
+      </div>
+      <div class="keys" id="keys">
+        <button type="button" class="key rv" data-k="6"><span class="cap">6</span><b>Trocar estágio</b><span>Muda o atraso máximo do buffer.</span></button>
+        <button type="button" class="key rv" data-k="7" style="--d:50ms"><span class="cap">7</span><b>Abrir o menu</b><span>Janela com as abas Buffer, Prediction, Modes, Custom e Tools.</span></button>
+        <button type="button" class="key rv" data-k="RS" style="--d:100ms"><span class="cap">R Shift</span><b>Menu também</b><span>Abre e fecha o menu na fase e no menu principal.</span></button>
+        <button type="button" class="key rv" data-k="F8" style="--d:150ms"><span class="cap">F8</span><b>Copiar o log</b><span>Copia o console para a área de transferência.</span></button>
+        <button type="button" class="key rv" data-k="F9" style="--d:200ms"><span class="cap">F9</span><b>Console</b><span>Mostra ou esconde o console dentro do jogo.</span></button>
+        <button type="button" class="key rv" data-k="F10" style="--d:250ms"><span class="cap">F10</span><b>Path view</b><span>Desenha a previsão na fase.</span></button>
+        <button type="button" class="key rv" data-k="F11" style="--d:300ms"><span class="cap">F11</span><b>Esquecer a fase</b><span>Apaga a memória desta fase.</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="menu">
+    <div class="wrap menu-grid">
+      <div class="menu rv" id="mMenu" data-mt="purple">
+        <div class="stars"></div><div class="shoot"></div>
+        <div class="m-head"><img src="logo.png" alt=""><b>Input Buffer</b><span class="x" aria-hidden="true">×</span></div>
+        <div class="m-tabs" role="tablist" aria-label="Abas do menu">
+          <button role="tab" aria-selected="true" data-tab="buffer">Buffer</button>
+          <button role="tab" aria-selected="false" data-tab="prediction">Prediction</button>
+          <button role="tab" aria-selected="false" data-tab="modes">Modes</button>
+          <button role="tab" aria-selected="false" data-tab="custom">Custom</button>
+          <button role="tab" aria-selected="false" data-tab="tools">Tools</button>
+        </div>
+        <div class="m-body" id="mBody" role="tabpanel"></div>
+      </div>
+      <div class="menu-copy rv" style="--d:100ms">
+        <div class="sec-head" style="margin-bottom:18px">
+          <span class="kicker">O menu dentro do jogo</span>
+          <h2>Um céu cheio de estrelas e todos os botões</h2>
+        </div>
+        <p>Abra com 7, Right Shift ou o coração no menu de pausa (é assim que se abre no celular). A janela arrasta, tem cinco temas e fontes Orbitron e Exo 2.</p>
+        <ul>
+          <li>Os interruptores aqui ao lado funcionam. Path view, Flash e Ding controlam a demo lá em cima.</li>
+          <li>Na aba Custom, cada modo de jogo tem o seu próprio limite de frames.</li>
+        </ul>
+        <div class="themes" id="themes" role="group" aria-label="Tema do menu">
+          <button type="button" class="theme" data-t="purple" aria-pressed="true" style="--c:#a477ff"><i></i>Purple</button>
+          <button type="button" class="theme" data-t="pink" aria-pressed="false" style="--c:#ff7ac8"><i></i>Pink</button>
+          <button type="button" class="theme" data-t="blue" aria-pressed="false" style="--c:#4aa3ff"><i></i>Blue</button>
+          <button type="button" class="theme" data-t="green" aria-pressed="false" style="--c:#55e39a"><i></i>Green</button>
+          <button type="button" class="theme" data-t="dark" aria-pressed="false" style="--c:#c9d2e8"><i></i>Dark</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="config">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">mod.json</span>
+        <h2>Todas as <span id="sxTotal">68</span> configurações</h2>
+        <p>Nomes e descrições como aparecem no Geode. Procure por nome, id ou palavra da descrição.</p>
+      </div>
+      <div class="sx-bar">
+        <input id="sxQ" type="search" placeholder="Procurar: wave, orb, ticks, memory…" aria-label="Procurar configuração" autocomplete="off">
+        <div class="fchips" id="sxF" role="group" aria-label="Filtrar por tipo">
+          <button type="button" data-f="all" aria-pressed="true">Todas</button>
+          <button type="button" data-f="bool" aria-pressed="false">Liga/desliga</button>
+          <button type="button" data-f="num" aria-pressed="false">Números</button>
+          <button type="button" data-f="keybind" aria-pressed="false">Teclas</button>
+          <button type="button" data-f="debug" aria-pressed="false">Debug</button>
+        </div>
+        <span class="sx-count" id="sxCount"></span>
+      </div>
+      <div class="sx-list" id="sxList"></div>
+      <div class="sx-more"><button type="button" class="btn ghost" id="sxMore">Mostrar todas</button></div>
+    </div>
+  </section>
+
+  <section class="block" id="baixar">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">Instalação</span>
+        <h2>Pronto em um minuto</h2>
+      </div>
+      <div class="install">
+        <ol class="inst rv">
+          <li><div><b>Instale o Geode</b><p>O Input Buffer é um mod do Geode. Pegue o instalador em <a href="https://geode-sdk.org" rel="noopener">geode-sdk.org</a> (no Android, o Geode Launcher).</p></div></li>
+          <li><div><b>Baixe o TESTEBUFFER.geode</b><p>É um arquivo só, com as builds de Windows, Android 32/64 e macOS juntas.</p></div></li>
+          <li><div><b>Coloque na pasta de mods</b><p>No PC: <code class="path">pasta do Geometry Dash/geode/mods</code>. No Android: <code class="path">Android/media/com.geode.launcher/game/geode/mods</code>.</p></div></li>
+          <li><div><b>Abra uma fase</b><p>Aperte 6 para escolher o estágio e 7 para abrir o menu. No celular, use o coração roxo no menu de pausa.</p></div></li>
+        </ol>
+        <div class="rv" style="--d:100ms;display:grid;gap:14px">
+          <div class="dl">
+            <div class="file"><img src="logo.png" alt=""><div><b>TESTEBUFFER.geode</b><small>pré-lançamento "teste" · 1.740.691 bytes</small></div></div>
+            <dl class="kv">
+              <dt>Versão</dt><dd>v2.101.0</dd>
+              <dt>ID</dt><dd>basu.input-buffer</dd>
+              <dt>Dev</dt><dd>timbodev</dd>
+              <dt>Commit</dt><dd>25122ab</dd>
+              <dt>Jogo</dt><dd>GD 2.2081 · Geode 5.11.2</dd>
+            </dl>
+            <div class="sha"><code id="sha">sha256:0d1c896487b25039944e3e74bf12f219c346e4dfcd66fd28a7ff4d3ddd89f7bd</code><button type="button" class="copy" id="copySha">Copiar</button></div>
+            <div class="cta">
+              <a class="btn" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/download/teste/TESTEBUFFER.geode">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+                Baixar
+              </a>
+              <a class="btn ghost" href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/tag/teste">Página da release</a>
+            </div>
+          </div>
+          <div class="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span>Feito para treinar. Não use em runs verificadas nem de leaderboard. TPS diferente de 240 também muda a física e não vale como completion legítima.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="changelog">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">Changelog</span>
+        <h2>Mais de cem versões</h2>
+        <p>Alguns marcos, do mais novo para o mais antigo. A lista completa está no README do repositório.</p>
+      </div>
+      <ul class="log rv">
+        <li><span class="v">v2.101</span><p>Agora se chama Input Buffer (dev timbodev). Nova opção "Flash when save": a tela pisca verde a cada save.</p></li>
+        <li><span class="v">v2.100</span><p>Opção para esconder os botões de coração. Right Shift abre e fecha o menu.</p></li>
+        <li><span class="v">v2.99</span><p>Opção para tirar a marca d'água "CBF | estágio".</p></li>
+        <li><span class="v">v2.94</span><p>Botão do menu de volta no pause, para abrir no celular dentro da fase.</p></li>
+        <li><span class="v">v2.92</span><p>Menu novo: janela arrastável com abas, tema espacial com estrelas cadentes e frames por modo na aba Custom.</p></li>
+        <li><span class="v">v2.83</span><p>Builds para macOS.</p></li>
+        <li><span class="v">v2.82</span><p>Suporte a Android 32 e 64 bits, com botão de Console no menu.</p></li>
+        <li><span class="v">v2.80</span><p>Configuração de TPS da física, de 240 a 1000.</p></li>
+        <li><span class="v">v2.79</span><p>Auto-click e previsões que atravessam portais de modo.</p></li>
+        <li><span class="v">v2.75</span><p>Run check, presets Safe / Balanced / Aggressive e teclas configuráveis.</p></li>
+        <li><span class="v">v2.65</span><p>Path view ao vivo: azul é não fazer nada, amarelo é clicar agora.</p></li>
+        <li><span class="v">v2.51</span><p>Modo treino, configurações por fase, mapa de mortes e swing inteligente.</p></li>
+        <li><span class="v">v2.44</span><p>Primeiro menu dentro do jogo. A nave ganha atraso próprio.</p></li>
+        <li><span class="v">v2.35</span><p>Sincronia com Click Between Frames e modo de baixa latência.</p></li>
+        <li><span class="v">v2.13</span><p>Memória de fase: o mod aprende com as suas runs.</p></li>
+        <li><span class="v">v2.6</span><p>Alinhamento de orb.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="faq">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="kicker">Perguntas</span>
+        <h2>Antes de instalar</h2>
+      </div>
+      <div class="faq rv">
+        <details open><summary>O mod joga por mim?</summary><p>Não. Ele só mexe nos cliques que você já fez: segura um clique feito cedo até o tick em que ele funciona. Se você não clicar, nada acontece. As exceções são auto-release e auto-click, que vêm desligados e, por padrão, só agem no modo prática.</p></details>
+        <details><summary>Posso usar em runs que vou mandar para a leaderboard?</summary><p>Não. O mod é para treino. Fora do modo prática aparece a marca d'água "CBF | estágio" enquanto o buffer está ligado, e qualquer TPS diferente de 240 muda a física do jogo.</p></details>
+        <details><summary>Funciona no celular?</summary><p>Sim, no Android (32 e 64 bits). Como não tem teclado, abra o menu pelo coração roxo no menu de pausa; o console tem um botão no próprio menu. iOS ainda não tem build.</p></details>
+        <details><summary>Funciona junto com o Click Between Frames?</summary><p>Sim. Com a opção "Click Between Frames sync", a previsão começa do ponto exato dentro do tick em que o clique caiu.</p></details>
+        <details><summary>Meu FPS cai quando eu clico. E agora?</summary><p>Ligue o modo desempenho: cada clique fica com no máximo 4 ms de previsão. O "Auto time budget" já faz isso sozinho quando o jogo está perdendo frames.</p></details>
+        <details><summary>Os cliques parecem atrasados.</summary><p>Ligue o modo de baixa latência (atraso de no máximo 1 frame) ou diminua o estágio com a tecla 6. Para aprender o timing sem atraso nenhum, use o modo treino.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top"><img src="logo.png" alt="" width="34" height="34">INPUT BUFFER</a>
+    <span>Mod por timbodev · <a href="https://github.com/porqueijjmzm1/Click-After-Frames">código no GitHub</a> · Não é afiliado à RobTop Games.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ===== ENGINE START =====
+// World units: 1 block = 30. Physics runs at 240 ticks/s like the game (4 ticks = 1 frame at 60 fps).
+const B = 30, TPS = 240, SPEED = 1.3, G = 0.0528, V0 = 2.64, PW = 30;
+const HOLD = 6, STAND = 8, LOOK = 160;
+const SL = 0.36 * B, SR = 0.64 * B, SH = 0.62 * B; // spike hitbox (inner strip, like the game's small spike box)
+
+function lowerBound(obs, x) {
+  let lo = 0, hi = obs.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (obs[m].x < x) lo = m + 1; else hi = m; }
+  return lo;
+}
+function newPlayer() { return { x: 0, y: 0, vy: 0, g: true, dead: false, jumps: 0, landed: false }; }
+
+function step(s, held, obs) {
+  if (s.g && held) { s.vy = V0; s.g = false; s.jumps++; }
+  const py = s.y;
+  s.landed = false;
+  s.x += SPEED;
+  if (!s.g) { s.vy -= G; s.y += s.vy; }
+  let supported = false;
+  if (s.y <= 0) { s.y = 0; if (!s.g) s.landed = true; s.vy = 0; s.g = true; supported = true; }
+  for (let i = lowerBound(obs, s.x - B - 2); i < obs.length; i++) {
+    const o = obs[i];
+    if (o.x > s.x + PW) break;
+    if (o.k === 1) {
+      const top = o.y + B;
+      if (s.x + PW > o.x + 1 && s.x < o.x + B - 1) {
+        if (s.y < top - 0.001 && s.y + PW > o.y + 0.001) {
+          if (py >= top - 9 && s.vy <= 0) { s.y = top; s.vy = 0; if (!s.g) s.landed = true; s.g = true; supported = true; }
+          else { s.dead = true; return s; }
+        } else if (Math.abs(s.y - top) < 0.01) supported = true;
+      }
+    } else {
+      const L = o.x + SL, R = o.x + SR, bot = o.y, tp = o.y + SH;
+      if (s.x + PW - 2 > L && s.x + 2 < R && s.y < tp && s.y + PW - 2 > bot) { s.dead = true; return s; }
+    }
+  }
+  if (s.g && !supported) { s.g = false; s.vy = 0; }
+  return s;
+}
+
+// Run a hidden copy of the player. pressAt < 0 = never press.
+// A press counts as safe once its jump has landed and the player stood STAND ticks.
+function ghost(s0, pressAt, maxT, obs, pts) {
+  const s = { ...s0 };
+  const j0 = s0.jumps;
+  let stood = 0;
+  for (let t = 0; t < maxT; t++) {
+    const held = pressAt >= 0 && t >= pressAt && t < pressAt + HOLD;
+    step(s, held, obs);
+    if (pts && (t % 3 === 0 || s.dead)) pts.push(s.x, s.y);
+    if (s.dead) return { dead: true, t, jumped: s.jumps > j0 };
+    if (s.jumps > j0) {
+      if (s.g) { if (++stood >= STAND) return { dead: false, t, jumped: true }; }
+      else stood = 0;
+    }
+  }
+  return { dead: false, t: maxT, jumped: s.jumps > j0 };
+}
+
+// What the buffer does with a press made right now.
+function decide(s, maxD, obs, withPaths) {
+  const nowPts = withPaths ? [] : null;
+  const now = ghost(s, 0, LOOK, obs, nowPts);
+  if (!now.jumped && !now.dead) return { kind: 'air', d: 0 };
+  if (!now.dead) return { kind: 'safe', d: 0, nowPts };
+  for (let d = 1; d <= maxD; d++) {
+    const r = ghost(s, d, d + LOOK, obs, null);
+    if (r.dead && r.t < d) break; // waiting already kills you
+    if (!r.dead && r.jumped) {
+      let chosen = null;
+      if (withPaths) { chosen = []; ghost(s, d, d + LOOK, obs, chosen); }
+      return { kind: 'save', d, nowPts, chosen, crash: now.t };
+    }
+  }
+  return { kind: 'nosave', d: 0, nowPts, crash: now.t };
+}
+
+// The demo bot: finds the first tick a jump is safe, then clicks a few ticks before it on purpose.
+function botPlan(s, obs, rnd) {
+  const idle = ghost(s, -1, 90, obs, null);
+  if (!idle.dead) return -1;
+  let a = -1;
+  for (let d = 0; d <= idle.t; d++) {
+    const r = ghost(s, d, d + LOOK, obs, null);
+    if (!r.dead && r.jumped) { a = d; break; }
+  }
+  if (a < 0) return 0;
+  if (a < 4 || rnd() < 0.18) return a;
+  const early = Math.min(a, 6 + Math.floor(rnd() * 22));
+  return a - early;
+}
+
+const PATTERNS = [
+  { w: 1, o: [[0, 0, 0]], p: 3 },
+  { w: 2, o: [[0, 0, 0], [0, 1, 0]], p: 3 },
+  { w: 3, o: [[0, 0, 0], [0, 1, 0], [0, 2, 0]], p: 2 },
+  { w: 4, o: [[1, 0, 0], [1, 1, 0], [1, 2, 0], [1, 3, 0]], p: 1 },
+  { w: 7, o: [[1, 0, 0], [1, 1, 0], [1, 2, 0], [0, 6, 0]], p: 2 },
+  { w: 5, o: [[1, 0, 0], [1, 1, 0], [1, 2, 0], [1, 3, 0], [1, 4, 0], [0, 4, 1]], p: 2 },
+  { w: 4, o: [[1, 0, 0], [0, 1, 0], [0, 2, 0], [1, 3, 0]], p: 2 },
+  { w: 6, o: [[1, 0, 0], [1, 3, 0], [1, 3, 1], [1, 4, 0], [1, 4, 1], [1, 5, 0], [1, 5, 1]], p: 1 },
+];
+const PSUM = PATTERNS.reduce((a, p) => a + p.p, 0);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeLevel(seed) { return { obs: [], genX: 16 * B, rnd: mulberry32(seed) }; }
+function extendLevel(L, upTo) {
+  while (L.genX < upTo) {
+    let r = L.rnd() * PSUM, p = PATTERNS[0];
+    for (const q of PATTERNS) { r -= q.p; if (r <= 0) { p = q; break; } }
+    const objs = p.o.map(([k, bx, by]) => ({ k, x: L.genX + bx * B, y: by * B })).sort((a, b) => a.x - b.x);
+    for (const o of objs) L.obs.push(o);
+    L.genX += (p.w + 6 + Math.floor(L.rnd() * 5)) * B;
+  }
+}
+// ===== ENGINE END =====
+
+(() => {
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function copyText(text, okMsg) {
+  const done = () => toast(okMsg);
+  try {
+    navigator.clipboard.writeText(text).then(done, () => toast('Não deu para copiar aqui. Selecione o texto e copie.'));
+  } catch (e) { toast('Não deu para copiar aqui. Selecione o texto e copie.'); }
+}
+
+/* ---------- hero title split ---------- */
+$$('[data-split]').forEach((el, li) => {
+  const txt = el.textContent; el.textContent = '';
+  [...txt].forEach((c, i) => {
+    const s = document.createElement('span'); s.className = 'ch'; s.textContent = c;
+    s.style.setProperty('--i', li * 5 + i);
+    if (el.dataset.late !== undefined && i === Number(el.dataset.late)) s.classList.add('late');
+    el.appendChild(s);
+  });
+});
+
+/* ---------- star sky ---------- */
+(function sky() {
+  const c = $('#sky'), x = c.getContext('2d');
+  let w, h, dpr, stars = [], shoot = null, last = 0;
+  function size() {
+    dpr = Math.min(devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight;
+    c.width = w * dpr; c.height = h * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.min(260, Math.round(w * h / 7000));
+    stars = Array.from({ length: n }, () => ({ x: Math.random() * w, y: Math.random() * h * 1.6, r: Math.random() * 1.2 + 0.25, p: Math.random() * 6.28, s: 0.4 + Math.random() * 1.4, z: 0.02 + Math.random() * 0.08 }));
+  }
+  function draw(t) {
+    x.clearRect(0, 0, w, h);
+    const sy = scrollY;
+    for (const s of stars) {
+      const a = reduce ? 0.7 : 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(s.p + t / 1000 * s.s));
+      let y = (s.y - sy * s.z) % (h * 1.6); if (y < 0) y += h * 1.6;
+      if (y > h) continue;
+      x.globalAlpha = a; x.fillStyle = s.r > 1.1 ? '#cfe6ff' : '#ffffff';
+      x.beginPath(); x.arc(s.x, y, s.r, 0, 6.283); x.fill();
+    }
+    if (!reduce) {
+      if (!shoot && Math.random() < 0.004) shoot = { x: Math.random() * w * 0.7, y: Math.random() * h * 0.4, l: 0 };
+      if (shoot) {
+        shoot.l += 0.02; const k = shoot.l, len = 140;
+        const hx = shoot.x + k * 520, hy = shoot.y + k * 200;
+        const g = x.createLinearGradient(hx - len, hy - len * 0.38, hx, hy);
+        g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,' + (1 - k) + ')');
+        x.globalAlpha = 1; x.strokeStyle = g; x.lineWidth = 1.6;
+        x.beginPath(); x.moveTo(hx - len, hy - len * 0.38); x.lineTo(hx, hy); x.stroke();
+        if (k >= 1) shoot = null;
+      }
+    }
+    x.globalAlpha = 1;
+  }
+  function loop(t) { if (t - last > 33) { last = t; draw(t); } requestAnimationFrame(loop); }
+  size(); addEventListener('resize', size);
+  if (reduce) { draw(0); addEventListener('scroll', () => draw(0), { passive: true }); } else requestAnimationFrame(loop);
+})();
+
+/* ---------- buffered cursor trail ---------- */
+if (!reduce && matchMedia('(pointer: fine)').matches) {
+  const N = 6, dots = [];
+  for (let i = 0; i < N; i++) {
+    const d = document.createElement('div'); d.className = 'trail';
+    d.style.setProperty('--o', (1 - i / N) * 0.85); d.style.transform = 'scale(' + (1 - i * 0.11) + ')';
+    document.body.appendChild(d); dots.push({ el: d, x: -50, y: -50 });
+  }
+  let mx = -50, my = -50, on = false;
+  addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; if (!on) { on = true; document.body.classList.add('trail-on'); } }, { passive: true });
+  document.addEventListener('pointerleave', () => { on = false; document.body.classList.remove('trail-on'); });
+  (function f() {
+    let px = mx, py = my;
+    dots.forEach((d, i) => {
+      d.x += (px - d.x) * (i === 0 ? 0.5 : 0.32); d.y += (py - d.y) * (i === 0 ? 0.5 : 0.32);
+      d.el.style.translate = (d.x + 14 + i * 2) + 'px ' + (d.y + 10) + 'px';
+      px = d.x; py = d.y;
+    });
+    requestAnimationFrame(f);
+  })();
+}
+
+/* ---------- reveal on scroll (only for things below the fold at load) ---------- */
+if (!reduce && 'IntersectionObserver' in window) {
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.remove('pre'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  requestAnimationFrame(() => $$('.rv').forEach(el => {
+    if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('pre'); io.observe(el); }
+  }));
+}
+
+/* ---------- spotlight on feature cards ---------- */
+$$('.feat').forEach(el => el.addEventListener('pointermove', e => {
+  const r = el.getBoundingClientRect();
+  el.style.setProperty('--mx', (e.clientX - r.left) + 'px'); el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+}));
+
+/* ======================================================================
+   Playable demo
+   ====================================================================== */
+const Game = (() => {
+  const play = $('#play'), cv = $('#game'), cx = cv.getContext('2d');
+  const STAGES = [16, 24, 32, 40];
+  const st = { mode: 'bot', buffer: 'on', path: true, live: false, flash: true, ding: false, console: true, stage: 2 };
+  let L, p, T, sched, held, plan, botRel, curDelay, pendingDown, paths, live, parts, floats, flash, flashCol, shake, deadAt, rot, rotV, lastInput;
+  let saves = 0, attempts = 1, best = 0;
+  let inq = [];
+  const logLines = [];
+  let cw = 0, ch = 0, dpr = 1, k = 1, gy = 0, bgGrad, groundGrad;
+  let visible = true, ignoreUp = false, audioCtx = null;
+
+  const fr = d => (d / 4).toFixed(1).replace('.', ',');
+  function log(html) {
+    logLines.push({ t: T, html });
+    if (logLines.length > 80) logLines.shift();
+    drawConsole();
+  }
+  function drawConsole() {
+    const el = $('#console');
+    el.hidden = !st.console;
+    el.innerHTML = logLines.slice(innerWidth < 560 ? -2 : -4).map(l => '[t' + l.t + '] ' + l.html).join('\n') || '[t0] buffer pronto';
+  }
+  function reset() {
+    L = makeLevel((Math.random() * 1e9) | 0);
+    p = newPlayer(); T = 0; sched = []; held = false; plan = -1; botRel = -1; curDelay = 0; pendingDown = -1;
+    paths = []; live = null; parts = []; floats = []; flash = 0; shake = 0; deadAt = 0; rot = 0; rotV = 0; inq = [];
+  }
+
+  function ding() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), n = audioCtx.currentTime;
+      o.type = 'sine'; o.frequency.setValueAtTime(1320, n); o.frequency.exponentialRampToValueAtTime(1980, n + 0.06);
+      g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(0.18, n + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.35);
+      o.connect(g).connect(audioCtx.destination); o.start(n); o.stop(n + 0.4);
+    } catch (e) { /* no audio */ }
+  }
+
+  function press() {
+    if (pendingDown > T) return;
+    let d = 0;
+    if (st.buffer !== 'off') {
+      const r = decide(p, STAGES[st.stage], L.obs, st.path);
+      if (r.kind === 'save') {
+        if (st.buffer === 'on') {
+          d = r.d; saves++;
+          log('<span class="ok">clique salvo: +' + d + 't (' + fr(d) + 'f)</span>');
+          floats.push({ x: p.x + PW / 2, y: p.y + PW + 10, txt: '+' + fr(d) + 'f', life: 1, col: '#5ef0a0' });
+          if (st.flash) { flash = 1; flashCol = '94,240,160'; }
+          if (st.ding) ding();
+          if (st.path) paths.push({ now: r.nowPts, chosen: r.chosen, fire: [p.x + d * SPEED, p.y], born: performance.now() });
+        } else {
+          log('<span class="mid">treino: clique ' + fr(r.d) + 'f cedo</span>');
+          floats.push({ x: p.x + PW / 2, y: p.y + PW + 10, txt: fr(r.d) + 'f cedo', life: 1, col: '#ffd65a' });
+          if (st.path) paths.push({ now: r.nowPts, chosen: null, born: performance.now() });
+        }
+      } else if (r.kind === 'safe') {
+        log('clique seguro, passa direto');
+      } else if (r.kind === 'nosave') {
+        log('<span class="bad">sem save: bate em ' + r.crash + 't</span>');
+        if (st.path) paths.push({ now: r.nowPts, chosen: null, born: performance.now() });
+      }
+    }
+    curDelay = d; pendingDown = T + d;
+    sched.push({ t: T + d, down: true, d });
+    sched.sort((a, b) => a.t - b.t);
+  }
+  function release() {
+    const t = Math.max(T + curDelay, pendingDown + 1);
+    sched.push({ t, down: false });
+    sched.sort((a, b) => a.t - b.t);
+  }
+
+  function burst(x, y, n, col, spd, life) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, v = spd * (0.3 + Math.random());
+      parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v + spd * 0.4, life, max: life, col, s: 2 + Math.random() * 4 });
+    }
+  }
+
+  function tick() {
+    if (p.dead) return;
+    extendLevel(L, p.x + 2400);
+    while (inq.length) { const e = inq.shift(); if (e === 'd') press(); else release(); }
+    if (st.mode === 'bot') {
+      if (plan < 0 && botRel < 0 && p.g && !held && sched.length === 0) {
+        const d = botPlan(p, L.obs, Math.random);
+        if (d >= 0) plan = T + d;
+      }
+      if (plan >= 0 && T >= plan) { plan = -1; press(); botRel = T + HOLD; }
+      if (botRel >= 0 && T >= botRel) { botRel = -1; release(); }
+    }
+    while (sched.length && sched[0].t <= T) {
+      const e = sched.shift(); held = e.down;
+      if (e.down && e.d > 0) burst(p.x + PW / 2, p.y + PW / 2, 10, '255,255,255', 1.6, 0.35);
+    }
+    const j = p.jumps;
+    step(p, held, L.obs);
+    if (p.jumps !== j) burst(p.x + 4, p.y + 2, 6, '156,207,255', 1.2, 0.4);
+    if (p.landed) burst(p.x + PW / 2, p.y, 8, '156,207,255', 1, 0.35);
+    if (!p.g) rot += Math.PI / 100;
+    else { const target = Math.round(rot / (Math.PI / 2)) * (Math.PI / 2); rot += (target - rot) * 0.25; }
+    if (p.dead) die();
+    if (st.live && T % 4 === 0) {
+      const a = [], b = [];
+      ghost(p, -1, LOOK, L.obs, a); ghost(p, 0, LOOK, L.obs, b);
+      live = { idle: a, now: b };
+    }
+    T++;
+  }
+
+  function die() {
+    deadAt = performance.now();
+    burst(p.x + PW / 2, p.y + PW / 2, 34, '255,84,112', 3.2, 0.9);
+    burst(p.x + PW / 2, p.y + PW / 2, 16, '156,207,255', 2.2, 0.7);
+    shake = 14; flash = 0.8; flashCol = '255,84,112';
+    log('<span class="bad">morreu em ' + Math.floor(p.x / B) + ' blocos</span>');
+  }
+
+  function resize() {
+    const r = play.getBoundingClientRect();
+    cw = r.width; ch = r.height; dpr = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+    k = ch / (B * 7.4);
+    gy = ch - 1.7 * B * k;
+    bgGrad = cx.createLinearGradient(0, 0, 0, ch);
+    bgGrad.addColorStop(0, '#0b1745'); bgGrad.addColorStop(0.7, '#08113a'); bgGrad.addColorStop(1, '#050a24');
+    groundGrad = cx.createLinearGradient(0, gy, 0, ch);
+    groundGrad.addColorStop(0, '#11225f'); groundGrad.addColorStop(1, '#060c2a');
+  }
+
+  function dotsPath(pts, camX, col, alpha, every) {
+    if (!pts || pts.length < 4) return;
+    cx.fillStyle = 'rgba(' + col + ',' + alpha + ')';
+    for (let i = 0; i < pts.length; i += 2 * every) {
+      const X = (pts[i] - camX + PW / 2) * k, Y = gy - (pts[i + 1] + PW / 2) * k;
+      cx.beginPath(); cx.arc(X, Y, Math.max(1.6, k * 1.6), 0, 6.283); cx.fill();
+    }
+  }
+
+  function draw(now, dt) {
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx.fillStyle = bgGrad; cx.fillRect(0, 0, cw, ch);
+    let ox = 0, oy = 0;
+    if (shake > 0.3) { ox = (Math.random() - 0.5) * shake; oy = (Math.random() - 0.5) * shake; shake *= 0.88; }
+    cx.save(); cx.translate(ox, oy);
+    const lead = Math.min(cw * 0.26, 6 * B * k);
+    const camX = p.x - lead / k;
+
+    // parallax background squares
+    const S = B * k * 2.4, par = (camX * 0.2 * k) % S;
+    cx.lineWidth = 1;
+    for (let i = -1; i < cw / S + 2; i++) {
+      const wi = Math.floor((camX * 0.2 * k) / S) + i;
+      for (let r = 0; r * S < gy; r++) {
+        const hsh = Math.sin(wi * 12.9898 + r * 78.233) * 43758.5453;
+        const a = (hsh - Math.floor(hsh)) * 0.07;
+        if (a < 0.02) continue;
+        cx.strokeStyle = 'rgba(120,170,255,' + a.toFixed(3) + ')';
+        cx.strokeRect(i * S - par + 3, gy - (r + 1) * S + 3, S - 6, S - 6);
+      }
+    }
+
+    // ground
+    cx.fillStyle = groundGrad; cx.fillRect(0, gy, cw, ch - gy);
+    cx.strokeStyle = 'rgba(156,207,255,0.08)';
+    const gs = B * k * 2, goff = (camX * k) % gs;
+    for (let x = -goff; x < cw; x += gs) { cx.beginPath(); cx.moveTo(x, gy); cx.lineTo(x - 20, ch); cx.stroke(); }
+    const lg = cx.createLinearGradient(0, 0, cw, 0);
+    lg.addColorStop(0, 'rgba(156,207,255,0)'); lg.addColorStop(0.5, 'rgba(200,230,255,1)'); lg.addColorStop(1, 'rgba(156,207,255,0)');
+    cx.save(); cx.shadowColor = '#3d8bff'; cx.shadowBlur = 14; cx.strokeStyle = lg; cx.lineWidth = 2;
+    cx.beginPath(); cx.moveTo(0, gy); cx.lineTo(cw, gy); cx.stroke(); cx.restore();
+
+    // obstacles
+    const obs = L.obs, bk = B * k;
+    cx.save(); cx.shadowColor = 'rgba(61,139,255,0.9)'; cx.shadowBlur = 10; cx.lineJoin = 'round';
+    for (let i = lowerBound(obs, camX - B); i < obs.length; i++) {
+      const o = obs[i]; if (o.x > camX + cw / k + B) break;
+      const X = (o.x - camX) * k, Y = gy - o.y * k;
+      if (o.k === 0) {
+        const g = cx.createLinearGradient(0, Y - bk, 0, Y);
+        g.addColorStop(0, '#203a8f'); g.addColorStop(1, '#0a1235');
+        cx.fillStyle = g; cx.strokeStyle = '#cfe6ff'; cx.lineWidth = Math.max(1.4, k * 1.6);
+        cx.beginPath(); cx.moveTo(X + 1, Y); cx.lineTo(X + bk / 2, Y - bk * 0.94); cx.lineTo(X + bk - 1, Y); cx.closePath(); cx.fill(); cx.stroke();
+      } else {
+        cx.fillStyle = '#0d1a4c'; cx.strokeStyle = '#9ccfff'; cx.lineWidth = Math.max(1.4, k * 1.6);
+        cx.fillRect(X, Y - bk, bk, bk); cx.strokeRect(X + 0.5, Y - bk + 0.5, bk - 1, bk - 1);
+        cx.save(); cx.shadowBlur = 0; cx.strokeStyle = 'rgba(156,207,255,0.22)'; cx.lineWidth = 1;
+        cx.strokeRect(X + bk * 0.22, Y - bk * 0.78, bk * 0.56, bk * 0.56); cx.restore();
+      }
+    }
+    cx.restore();
+
+    // predicted paths
+    if (st.live && live) { dotsPath(live.idle, camX, '106,168,255', 0.55, 2); dotsPath(live.now, camX, '255,214,90', 0.7, 2); }
+    paths = paths.filter(pp => now - pp.born < 1800);
+    for (const pp of paths) {
+      const a = Math.max(0, 1 - (now - pp.born) / 1800);
+      dotsPath(pp.now, camX, '255,84,112', 0.9 * a, 1);
+      if (pp.now && pp.now.length) {
+        const n = pp.now.length;
+        cx.fillStyle = 'rgba(255,84,112,' + a + ')';
+        cx.beginPath(); cx.arc((pp.now[n - 2] - camX + PW / 2) * k, gy - (pp.now[n - 1] + PW / 2) * k, Math.max(4, k * 5), 0, 6.283); cx.fill();
+      }
+      if (pp.chosen) {
+        dotsPath(pp.chosen, camX, '94,240,160', 0.95 * a, 1);
+        cx.fillStyle = 'rgba(255,255,255,' + a + ')';
+        cx.beginPath(); cx.arc((pp.fire[0] - camX + PW / 2) * k, gy - (pp.fire[1] + PW / 2) * k, Math.max(4, k * 4.5), 0, 6.283); cx.fill();
+      }
+    }
+
+    // player
+    if (!p.dead) {
+      const s = PW * k, X = (p.x - camX) * k, Y = gy - p.y * k - s;
+      cx.save(); cx.translate(X + s / 2, Y + s / 2); cx.rotate(rot);
+      cx.shadowColor = 'rgba(61,139,255,0.9)'; cx.shadowBlur = 16;
+      const g = cx.createLinearGradient(0, -s / 2, 0, s / 2);
+      g.addColorStop(0, '#6fb6ff'); g.addColorStop(1, '#2f74e8');
+      cx.fillStyle = g; cx.fillRect(-s / 2, -s / 2, s, s);
+      cx.shadowBlur = 0;
+      cx.strokeStyle = '#e6f3ff'; cx.lineWidth = Math.max(1.5, k * 2); cx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
+      cx.fillStyle = '#0a1236'; cx.fillRect(-s * 0.28, -s * 0.28, s * 0.56, s * 0.56);
+      cx.fillStyle = '#5ef0a0'; cx.fillRect(-s * 0.12, -s * 0.12, s * 0.24, s * 0.24);
+      cx.restore();
+    }
+
+    // particles
+    for (const q of parts) {
+      q.life -= dt; q.x += q.vx * dt * 60; q.y += q.vy * dt * 60; q.vy -= 0.12 * dt * 60;
+      const a = Math.max(0, q.life / q.max);
+      cx.fillStyle = 'rgba(' + q.col + ',' + a + ')';
+      const sz = q.s * (0.5 + a * 0.5);
+      cx.fillRect((q.x - camX) * k - sz / 2, gy - q.y * k - sz / 2, sz, sz);
+    }
+    parts = parts.filter(q => q.life > 0);
+
+    // floating labels
+    cx.textAlign = 'center'; cx.font = '900 ' + Math.max(13, Math.round(k * 15)) + 'px Orbitron, sans-serif';
+    for (const f of floats) {
+      f.life -= dt * 0.9; f.y += dt * 60;
+      cx.globalAlpha = Math.max(0, Math.min(1, f.life * 2));
+      cx.fillStyle = f.col; cx.shadowColor = f.col; cx.shadowBlur = 12;
+      cx.fillText(f.txt, (f.x - camX) * k, gy - f.y * k);
+    }
+    cx.globalAlpha = 1; cx.shadowBlur = 0;
+    floats = floats.filter(f => f.life > 0);
+    cx.restore();
+
+    if (flash > 0.01) {
+      const g = cx.createRadialGradient(cw / 2, ch / 2, ch * 0.2, cw / 2, ch / 2, Math.max(cw, ch) * 0.75);
+      g.addColorStop(0, 'rgba(' + flashCol + ',' + (flash * 0.08) + ')'); g.addColorStop(1, 'rgba(' + flashCol + ',' + (flash * 0.42) + ')');
+      cx.fillStyle = g; cx.fillRect(0, 0, cw, ch);
+      flash *= Math.pow(0.02, dt);
+    }
+  }
+
+  let last = performance.now(), acc = 0, statT = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (visible && !document.hidden) {
+      if (!p.dead) { acc += dt * TPS; let n = 0; while (acc >= 1 && n < 60) { tick(); acc -= 1; n++; } if (n >= 60) acc = 0; }
+      else if (now - deadAt > 750) {
+        best = Math.max(best, Math.floor(p.x / B)); attempts++; reset();
+      }
+      draw(now, dt);
+      if (now - statT > 150) {
+        statT = now;
+        $('#stSaves').textContent = saves; $('#stAtt').textContent = attempts;
+        $('#stDist').textContent = Math.floor(p.x / B); $('#stBest').textContent = Math.max(best, Math.floor(p.x / B));
+      }
+      if (st.mode === 'player' && now - lastInput > 25000) setMode('bot');
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function setMode(m) {
+    st.mode = m; saves = 0; attempts = 1; best = 0; reset();
+    const chip = $('#modeChip');
+    chip.textContent = m === 'bot' ? 'DEMO AUTOMÁTICA' : 'VOCÊ ESTÁ JOGANDO';
+    chip.classList.toggle('you', m === 'player');
+    $('#hint').hidden = m !== 'bot';
+    $('#bDemo').hidden = m === 'bot';
+    log(m === 'bot' ? 'demo: o bot clica cedo de propósito' : 'sua vez: clique cedo e veja o buffer agir');
+  }
+  function down() {
+    lastInput = performance.now();
+    if (st.mode === 'bot') { setMode('player'); ignoreUp = true; return; }
+    inq.push('d');
+  }
+  function up() {
+    if (ignoreUp) { ignoreUp = false; return; }
+    if (st.mode === 'player') inq.push('u');
+  }
+
+  play.addEventListener('pointerdown', e => { if (e.button !== 0) return; e.preventDefault(); play.setPointerCapture?.(e.pointerId); down(); });
+  play.addEventListener('pointerup', up);
+  play.addEventListener('pointercancel', up);
+  play.addEventListener('contextmenu', e => e.preventDefault());
+
+  new IntersectionObserver(es => { visible = es[0].isIntersecting; last = performance.now(); }).observe(play);
+  new ResizeObserver(resize).observe(play);
+
+  const sync = () => {
+    $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === st.buffer)));
+    $('#bPath').setAttribute('aria-pressed', String(st.path));
+    $('#bLive').setAttribute('aria-pressed', String(st.live));
+    $('#bFlash').setAttribute('aria-pressed', String(st.flash));
+    $('#bDing').setAttribute('aria-pressed', String(st.ding));
+    $('#lgLive').hidden = !st.live;
+    const f = STAGES[st.stage] / 4 + 'f';
+    $('#stageVal').textContent = f; $('#wm').textContent = 'CBF | ' + f;
+    document.dispatchEvent(new CustomEvent('game-sync', { detail: st }));
+  };
+  $$('.seg button').forEach(b => b.addEventListener('click', () => {
+    st.buffer = b.dataset.v; sync();
+    log(st.buffer === 'on' ? 'buffer ligado' : st.buffer === 'train' ? 'modo treino: só dicas, sem atraso' : '<span class="bad">buffer desligado</span>');
+  }));
+  const api = {
+    st,
+    setStage(i) { st.stage = i; sync(); log('estágio: atraso máx. ' + STAGES[i] + 't (' + STAGES[i] / 4 + 'f)'); },
+    cycleStage() { api.setStage((st.stage + 1) % STAGES.length); },
+    set(key, v) { st[key] = v; if (key === 'live' && !v) live = null; sync(); },
+    toggle(key) { api.set(key, !st[key]); },
+    toggleConsole() { st.console = !st.console; drawConsole(); },
+    copyLog() { copyText(logLines.map(l => '[t' + l.t + '] ' + l.html.replace(/<[^>]+>/g, '')).join('\n') || '(log vazio)', 'Log da demo copiado'); },
+    forget() { saves = 0; attempts = 1; best = 0; reset(); log('memória da fase apagada'); },
+    down, up,
+    get onScreen() { return visible; },
+  };
+  $('#bStage').addEventListener('click', api.cycleStage);
+  $('#bPath').addEventListener('click', () => api.toggle('path'));
+  $('#bLive').addEventListener('click', () => api.toggle('live'));
+  $('#bFlash').addEventListener('click', () => api.toggle('flash'));
+  $('#bDing').addEventListener('click', () => { api.toggle('ding'); if (st.ding) ding(); });
+  $('#bDemo').addEventListener('click', () => setMode('bot'));
+
+  reset(); resize(); sync(); lastInput = performance.now();
+  log('demo: o bot clica cedo de propósito');
+  requestAnimationFrame(frame);
+  return api;
+})();
+
+/* ---------- modes ---------- */
+const MODES = [
+  { n: 'Cubo', id: 'cube-late-crash', t: 'O save só vale se o pulo aterrissar em segurança. Olha até 130 ticks à frente e escolhe o menor atraso.',
+    svg: '<g class="spin"><rect x="8" y="8" width="40" height="40" rx="3" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><rect x="18" y="18" width="20" height="20" fill="#0a1236"/><rect x="24" y="24" width="8" height="8" fill="#5ef0a0"/></g>' },
+  { n: 'Nave', id: 'ship-buffer', t: 'Atraso próprio e pequeno (4 ticks) porque a nave tem inércia. Toques de feathering passam direto.',
+    svg: '<g class="flap"><path d="M6 36 L18 22 H38 L50 30 L38 38 H18 Z" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5" stroke-linejoin="round"/><rect x="22" y="14" width="12" height="12" fill="#0a1236" stroke="#e6f3ff" stroke-width="2"/><path d="M6 30 h-4" stroke="#5ef0a0" stroke-width="3" stroke-linecap="round"/></g>' },
+  { n: 'Bola', id: 'ball-smart', t: 'Flips curtos em corredores contam como pouso, e só é seguro depois de rolar 8 ticks na nova superfície.',
+    svg: '<g class="spin"><circle cx="28" cy="28" r="20" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><path d="M28 8 V48 M8 28 H48" stroke="#0a1236" stroke-width="5"/><circle cx="28" cy="28" r="6" fill="#5ef0a0"/></g>' },
+  { n: 'UFO', id: 'ufo-smart', t: 'Uma batida só conta se mais um flap 6, 12 ou 18 ticks antes não teria salvo. Pousar conta como seguro.',
+    svg: '<g class="flap"><path d="M18 26 a10 10 0 0 1 20 0" fill="#0a1236" stroke="#e6f3ff" stroke-width="2.5"/><ellipse cx="28" cy="32" rx="22" ry="8" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><circle cx="28" cy="32" r="3" fill="#5ef0a0"/></g>' },
+  { n: 'Onda', id: 'wave-auto-release', t: 'Olha 65 ticks à frente (50 na mini). Pode soltar por você, e spam rápido vai direto para o jogo.',
+    svg: '<path d="M2 46 L14 34 L26 46 L38 34" fill="none" stroke="#5ef0a0" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/><g class="zig"><path d="M36 16 L52 26 L36 36 Z" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5" stroke-linejoin="round"/></g>' },
+  { n: 'Robô', id: 'robot-smart', t: 'Testa 8 durações de segurar, de um toque até o pulo mais alto, antes de chamar um clique de batida.',
+    svg: '<g class="hop"><rect x="12" y="8" width="32" height="24" rx="3" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><rect x="30" y="14" width="8" height="8" fill="#0a1236"/><path d="M20 32 V46 H14 M36 32 V46 H42" stroke="#e6f3ff" stroke-width="3" fill="none" stroke-linecap="round"/></g>' },
+  { n: 'Aranha', id: 'spider-smart', t: 'Um flip só conta como feito depois de 12 ticks em pé na nova superfície.',
+    svg: '<g class="hop"><ellipse cx="28" cy="24" rx="16" ry="11" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><circle cx="34" cy="22" r="4" fill="#5ef0a0"/><path d="M16 30 L8 44 M24 34 L20 46 M32 34 L36 46 M40 30 L48 44" stroke="#e6f3ff" stroke-width="2.5" stroke-linecap="round"/></g>' },
+  { n: 'Swing', id: 'swing-smart', t: 'Um flip é seguro se mais um flip a tempo teria salvo. Flips rápidos passam direto.',
+    svg: '<g class="flap"><circle cx="28" cy="28" r="14" fill="#3d8bff" stroke="#e6f3ff" stroke-width="2.5"/><path d="M14 22 L4 14 L10 28 Z M42 22 L52 14 L46 28 Z" fill="#9ccfff" stroke="#e6f3ff" stroke-width="2" stroke-linejoin="round"/><circle cx="28" cy="28" r="5" fill="#0a1236"/></g>' },
+];
+$('#modesGrid').innerHTML = MODES.map((m, i) =>
+  '<article class="mode rv" style="--d:' + (i % 4) * 60 + 'ms"><div class="ico"><svg viewBox="0 0 56 56" aria-hidden="true">' + m.svg + '</svg></div><h3>' + m.n + '</h3><p>' + m.t + '</p><code>' + m.id + '</code></article>').join('');
+if (!reduce && matchMedia('(pointer: fine)').matches) {
+  $$('.mode').forEach(el => {
+    el.addEventListener('pointermove', e => {
+      const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+      el.style.transform = 'perspective(700px) rotateX(' + (-y * 8) + 'deg) rotateY(' + (x * 10) + 'deg) translateY(-4px)';
+    });
+    el.addEventListener('pointerleave', () => { el.style.transform = ''; });
+  });
+}
+
+/* ---------- in-game menu mock ---------- */
+const MENU = {
+  buffer: [
+    ['stage', 'Stage', 'Atraso máximo (tecla 6). Ligado à demo.'],
+    ['sw', 'practice-only', 'Practice mode only', 'Só buffer no modo prática.', false],
+    ['sw', 'low-latency', 'Low latency mode', 'Atraso de no máximo 1 frame.', false],
+    ['sw', 'training-mode', 'Training mode (hints only)', 'Só dicas, nunca atrasa.', false],
+    ['sw', 'level-memory', 'Level memory', 'Aprende com as suas runs.', true],
+  ],
+  prediction: [
+    ['sw', 'smart-prediction', 'Orb / pad / portal prediction', 'O fantasma usa orbs, pads e portais.', true],
+    ['sw', 'predict-move-triggers', 'Predict move triggers', 'Prevê objetos que triggers vão mexer.', true],
+    ['sw', 'robust-saves', 'Robust saves', 'Testa meio tick à frente e atrás.', true],
+    ['sw', 'predict-through-portals', 'Predict through portals', 'Troca de modo dentro da previsão.', true],
+    ['sw', 'plan-next-click', 'Plan two clicks ahead', 'Tenta mais um clique depois de orbs.', true],
+  ],
+  modes: [
+    ['sw', 'ship-buffer', 'Ship: buffer inputs', '', true],
+    ['sw', 'ball-smart', 'Ball: smart flips', '', true],
+    ['sw', 'ufo-smart', 'UFO: smart flaps', '', true],
+    ['sw', 'robot-smart', 'Robot: smart jumps', '', true],
+    ['sw', 'spider-smart', 'Spider: smart flips', '', true],
+    ['sw', 'swing-smart', 'Swing: smart flips', '', true],
+  ],
+  custom: [
+    ['rg', 'Cube', 10], ['rg', 'Ship', 1], ['rg', 'Ball', 8], ['rg', 'UFO', 6], ['rg', 'Wave', 5], ['rg', 'Robot', 8], ['rg', 'Spider', 6], ['rg', 'Swing', 5],
+  ],
+  tools: [
+    ['sw', 'show-path', 'Path view', 'Previsão desenhada na fase (F10).', true, 'path'],
+    ['sw', 'save-flash', 'Flash when save', 'Tela pisca verde a cada save.', true, 'flash'],
+    ['sw', 'save-ding', 'Ding on save', 'Toca um ding a cada save.', false, 'ding'],
+    ['sw', 'death-heatmap', 'Death heatmap', 'Marcas na barra de progresso.', true],
+    ['sw', 'remove-watermark', 'Remove watermark', 'Esconde o "CBF | estágio".', false],
+    ['sw', 'hide-menu-buttons', 'Hide menu buttons', 'Esconde os corações.', false],
+    ['bt', 'Console log', 'Copy log', 'copy'],
+    ['bt', 'This level', 'Forget level', 'forget'],
+  ],
+};
+const MENU_STATE = {};
+const MODE_ICON = { Cube: 0, Ship: 1, Ball: 2, UFO: 3, Wave: 4, Robot: 5, Spider: 6, Swing: 7 };
+let mTab = 'buffer';
+function renderMenu() {
+  const rows = MENU[mTab].map(r => {
+    if (r[0] === 'stage') {
+      const f = [16, 24, 32, 40][Game.st.stage] / 4;
+      return '<div class="m-row"><div class="lbl">' + r[1] + '<small>' + r[2] + '</small></div><div class="stepper"><button type="button" class="m-btn" data-stage="-1" aria-label="Diminuir">−</button><output>' + f + 'f</output><button type="button" class="m-btn" data-stage="1" aria-label="Aumentar">+</button></div></div>';
+    }
+    if (r[0] === 'sw') {
+      const [, id, name, desc, def, link] = r;
+      const on = link ? Game.st[link] : (id in MENU_STATE ? MENU_STATE[id] : def);
+      return '<div class="m-row"><div class="lbl">' + name + (desc ? '<small>' + desc + '</small>' : '') + '</div><button type="button" class="sw" role="switch" aria-checked="' + on + '" aria-label="' + name + '" data-id="' + id + '"' + (link ? ' data-link="' + link + '"' : '') + '></button></div>';
+    }
+    if (r[0] === 'rg') {
+      const id = 'rg-' + r[1].toLowerCase(), v = id in MENU_STATE ? MENU_STATE[id] : r[2];
+      return '<div class="m-row"><svg class="m-ico" viewBox="0 0 56 56" aria-hidden="true">' + MODES[MODE_ICON[r[1]]].svg + '</svg><label class="lbl" for="' + id + '">' + r[1] + '</label><input type="range" id="' + id + '" min="0" max="16" value="' + v + '"><span class="val">' + v + 'f</span></div>';
+    }
+    return '<div class="m-row"><div class="lbl">' + r[1] + '</div><button type="button" class="m-btn" data-act="' + r[3] + '">' + r[2] + '</button></div>';
+  }).join('');
+  $('#mBody').innerHTML = rows;
+}
+$$('.m-tabs button').forEach(b => b.addEventListener('click', () => {
+  mTab = b.dataset.tab;
+  $$('.m-tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  renderMenu();
+}));
+$('#mBody').addEventListener('click', e => {
+  const sw = e.target.closest('.sw');
+  if (sw) {
+    const on = sw.getAttribute('aria-checked') !== 'true';
+    sw.setAttribute('aria-checked', String(on));
+    if (sw.dataset.link) Game.set(sw.dataset.link, on); else MENU_STATE[sw.dataset.id] = on;
+    if (sw.dataset.id === 'training-mode') { Game.st.buffer = on ? 'train' : 'on'; $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === Game.st.buffer))); }
+    return;
+  }
+  const s = e.target.closest('[data-stage]');
+  if (s) { Game.setStage((Game.st.stage + Number(s.dataset.stage) + 4) % 4); return; }
+  const a = e.target.closest('[data-act]');
+  if (a) { if (a.dataset.act === 'copy') Game.copyLog(); else { Game.forget(); toast('Memória da fase apagada'); } }
+});
+$('#mBody').addEventListener('input', e => {
+  if (e.target.type === 'range') { MENU_STATE[e.target.id] = e.target.value; e.target.nextElementSibling.textContent = e.target.value + 'f'; }
+});
+document.addEventListener('game-sync', () => { if (mTab === 'tools' || mTab === 'buffer') renderMenu(); });
+$$('#themes .theme').forEach(b => b.addEventListener('click', () => {
+  $('#mMenu').dataset.mt = b.dataset.t;
+  $$('#themes .theme').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+}));
+renderMenu();
+// drag the menu window by its title bar (like in the game)
+(() => {
+  const m = $('#mMenu'), h = $('.m-head', m); let sx, sy, ox = 0, oy = 0, drag = false;
+  h.addEventListener('pointerdown', e => { drag = true; sx = e.clientX - ox; sy = e.clientY - oy; h.setPointerCapture(e.pointerId); h.style.cursor = 'grabbing'; });
+  h.addEventListener('pointermove', e => { if (!drag) return; ox = Math.max(-60, Math.min(60, e.clientX - sx)); oy = Math.max(-40, Math.min(40, e.clientY - sy)); m.style.translate = ox + 'px ' + oy + 'px'; });
+  const end = () => { if (!drag) return; drag = false; h.style.cursor = ''; m.style.transition = 'translate .5s cubic-bezier(.2,1.4,.4,1)'; ox = oy = 0; m.style.translate = '0 0'; setTimeout(() => { m.style.transition = ''; }, 520); };
+  h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
+})();
+function openMenu() {
+  const m = $('#mMenu');
+  m.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
+}
+
+/* ---------- keys ---------- */
+function hitKey(k) {
+  const el = $('.key[data-k="' + k + '"]'); if (!el) return;
+  el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 160);
+}
+function keyAction(k) {
+  hitKey(k);
+  if (k === '6') { Game.cycleStage(); toast('Atraso máximo: ' + [16, 24, 32, 40][Game.st.stage] / 4 + ' frames'); }
+  else if (k === '7' || k === 'RS') openMenu();
+  else if (k === 'F8') Game.copyLog();
+  else if (k === 'F9') { Game.toggleConsole(); toast(Game.st.console ? 'Console visível' : 'Console escondido'); }
+  else if (k === 'F10') { Game.toggle('path'); toast(Game.st.path ? 'Path view ligado' : 'Path view desligado'); }
+  else if (k === 'F11') { Game.forget(); toast('Memória da fase apagada'); }
+}
+$$('.key').forEach(b => b.addEventListener('click', () => keyAction(b.dataset.k)));
+addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    if (Game.onScreen && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); if (!e.repeat) Game.down(); }
+    return;
+  }
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const map = { Digit6: '6', Numpad6: '6', Digit7: '7', Numpad7: '7', ShiftRight: 'RS', F8: 'F8', F9: 'F9', F10: 'F10' };
+  const k = map[e.code];
+  if (k) { if (k.startsWith('F')) e.preventDefault(); keyAction(k); }
+});
+addEventListener('keyup', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') Game.up();
+});
+
+/* ---------- settings explorer ---------- */
+const SETTINGS = [{"id":"custom-ticks","n":"Custom stage: max delay (ticks)","t":"int","d":"Max delay for the CUSTOM stage (key 6), all modes except wave. 4 ticks = 1 frame at 60fps.","v":40,"min":1,"max":64},{"id":"custom-wave-ticks","n":"Custom stage: max wave delay (ticks)","t":"int","d":"Max delay for the CUSTOM stage (key 6) while in wave.","v":20,"min":0,"max":64},{"id":"sim-budget-ms","n":"Prediction time budget (ms)","t":"float","d":"Max time spent predicting per click. Higher = finds longer saves on big windows, but may hitch on dense levels.","v":8.0,"min":1.0,"max":30.0},{"id":"smart-prediction","n":"Orb / pad / portal prediction","t":"bool","d":"Let the ghost use orbs, pads, gravity portals and speed portals. Turn off if you see glitches with objects.","v":true},{"id":"debug-console","n":"Debug console window","t":"bool","d":"Also open a separate Windows console with the same log as the in-game console (F9). Needs a restart.","v":false,"pl":["windows"]},{"id":"ground-horizon","n":"Cube / ball lookahead (ticks)","t":"int","d":"How far ahead the prediction looks for cube, ball and spider. A cube jump lasts about 100 ticks, so the old 48 never saw the landing. Higher = catches later hits but costs more time per click.","v":130,"min":48,"max":240},{"id":"practice-only","n":"Practice mode only","t":"bool","d":"ON: only buffer inputs in practice mode. OFF: buffer in every run.","v":false},{"id":"wave-horizon","n":"Wave lookahead (ticks)","t":"int","d":"How far ahead the wave prediction looks (mini wave uses 15 ticks less). 65 = 65 normal / 50 mini. Longer sees crashes further away but costs more time per click.","v":65,"min":20,"max":160},{"id":"orb-assume-hit","n":"Orbs: assume you click them (calculation mode)","t":"bool","d":"The prediction clicks every orb it touches, as if you hit it on time. Turn off if it predicts deaths for orbs you normally skip.","v":true},{"id":"orb-try-both","n":"Orbs: also try the other choice","t":"bool","d":"If a prediction touches an orb and dies, run it again with the opposite orb choice (click / skip) and keep the better one, like a player who only clicks the orb when needed.","v":true},{"id":"avoid-moving-objects","n":"Don't buffer near moving objects","t":"bool","d":"Experimental. The prediction sees the level frozen at your click. If the ghost's path touches spikes or blocks that moved recently (move/rotate triggers), the input goes through untouched instead of being delayed. Can cancel good saves on levels with lots of movement.","v":false},{"id":"wave-auto-release","n":"Wave auto-release","t":"bool","d":"While you hold in wave, if holding would crash within the window below and letting go clearly survives, the mod lets go for you. Your own release is then ignored. Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"auto-release-window","n":"Auto-release window (ticks)","t":"int","d":"Auto-release only fires when holding would crash within this many ticks. Small = lets go at the last moment. 4 ticks = 1 frame at 60fps.","v":6,"min":2,"max":24},{"id":"drift-check","n":"Drift check (debug)","t":"bool","d":"After each input, compare where the prediction said you'd go with where you actually went, and log the biggest gap in the in-game console (F9). Use it to see how precise the predictions are on a level.","v":false},{"id":"wave-spam-gap","n":"Wave spam: max gap (ticks)","t":"int","d":"Presses/releases closer together than this count as spam. After enough in a row (see the next setting), wave inputs go straight to the game until you pause. 16 ticks = 4 frames at 60fps (about 7 clicks/sec). Raise it if spam still gets buffered, lower it if tight wave parts stop being buffered.","v":16,"min":4,"max":40},{"id":"wave-spam-streak","n":"Wave spam: fast inputs before spam","t":"int","d":"How many fast presses/releases in a row it takes before spam goes straight to the game. The inputs before that are still buffered, so lower it (2) if the start of your spam feels off, raise it if quick wave zigzags stop being buffered.","v":3,"min":2,"max":6},{"id":"orb-align","n":"Orb alignment","t":"bool","d":"If you press a little before reaching an orb (and the press wouldn't hit it), the press is held back until you're inside the orb so it hits. Works for every mode except ship and wave. Needs 'Orb / pad / portal prediction' on.","v":true},{"id":"orb-align-ticks","n":"Orb alignment: max delay (ticks)","t":"int","d":"How early a press may be and still be moved onto the orb. 16 ticks = 4 frames at 60fps.","v":16,"min":1,"max":64},{"id":"wave-v46","n":"Wave: old v4.6 logic","t":"bool","d":"Use the old v4.6 wave rules (big-gain bar, 1-tick queued opposite). Off = the cube-style wave: a crash you could still turn away from counts as safe, and the smallest delay that clears the obstacle wins.","v":false},{"id":"wave-safety-margin","n":"Wave: safety margin","t":"bool","d":"When a wave save is found, use a delay with one tick of room on both sides instead of the one that only just clears the spike, so tiny differences in the real run can't clip it. Can add 1 tick (0.25f) to some saves.","v":true},{"id":"show-path","n":"Path view on at start","t":"bool","d":"Draw the predicted path in the level after each input (toggle any time with F10). Red = what the input would do right now, green = what the game actually gets, white dot = where a delayed input fires, red dot = crash. Costs two extra predictions per click while on.","v":false},{"id":"orb-align-ground","n":"Orb alignment: also from the ground","t":"bool","d":"Off: presses made while standing on the ground are normal jumps and never get moved onto an orb. On: a ground jump made just before an orb can be turned into an orb hit.","v":false},{"id":"full-ghost-state","n":"Full ghost state (v2.8)","t":"bool","d":"Copy the full player state (slopes, timers, forces, dash...) into the prediction ghost. Turn off to go back to the v2.7 ghost if predictions feel worse.","v":true},{"id":"robot-smart","n":"Robot: smart jumps","t":"bool","d":"A robot press only counts as a crash if no hold length saves it (your usual hold, then 8 holds from a tap to a full-height jump, nearest to yours first). Saves are found for presses that need a different jump height, and presses you can still control aren't delayed. Robot releases are judged the same way: a delayed release has to make the jump land safely.","v":true},{"id":"robot-auto-release","n":"Robot auto-release","t":"bool","d":"While you hold a robot jump, if holding longer would crash within the auto-release window and letting go survives, the mod lets go for you. Your own release is then ignored. Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"auto-click","n":"Auto-click (clicks for you)","t":"bool","d":"When you're not holding and doing nothing would crash within the auto-release window, but a click right now (with your usual hold) is fully safe, the mod clicks for you. Your own click, if it still comes, is ignored. Cube, ball, UFO, robot, spider and swing (not wave / ship). Practice mode only, unless 'Auto-release in normal runs' is on; then AUTO INPUTS ON shows on screen. Runs with this aren't legit.","v":false},{"id":"level-memory","n":"Level memory (learns from your runs)","t":"bool","d":"Remembers, per level and per spot, which delays worked, where saves ended in deaths and where you keep dying. Delays that worked before are tried first; spots where saves keep failing are left alone; orange dots in the path view mark spots where you die a lot. F11 forgets the current level.","v":true},{"id":"auto-release-normal-runs","n":"Auto-release in normal runs","t":"bool","d":"Let auto-release (wave / robot / dash) and auto-click also work outside practice mode. While they can act, an 'AUTO INPUTS ON' tag is shown on screen. Never use it for verified or leaderboard runs.","v":false},{"id":"spider-smart","n":"Spider: smart flips","t":"bool","d":"A spider flip counts as done once you stand on the new surface for 12 ticks, and a crash you could have avoided by flipping back counts as safe. Stops the spider from delaying flips because of obstacles that need your next click.","v":true},{"id":"dash-auto-release","n":"Dash orb auto-release","t":"bool","d":"While you hold a dash, if holding longer would crash within the auto-release window and letting go survives, the mod lets go for you (your own release is then ignored). Practice mode only, unless 'Auto-release in normal runs' is on.","v":false},{"id":"perf-log","n":"Performance log (debug)","t":"bool","d":"After each click, log in the console (F9) how long its predictions took, how many runs and ghost ticks it used, and the cost per ghost tick. Changes nothing about the decisions.","v":false},{"id":"ship-buffer","n":"Ship: buffer inputs","t":"bool","d":"Buffer ship presses and releases. A crash only counts if you couldn't have recovered (the opposite input 8 / 16 / 24 ticks before it is tried), the smallest delay that clears wins, and only very fast taps go straight through (ship spam gap). Off = ship is never touched.","v":true},{"id":"ship-max-delay","n":"Ship: max delay (ticks)","t":"int","d":"Ship's own max delay, used instead of the stage (key 6). Ship has momentum, so small delays are enough and big ones feel laggy. 4 ticks = 1 frame at 60fps.","v":4,"min":0,"max":16},{"id":"orb-timing","n":"Orb timing","t":"bool","d":"For orbs that only work at a specific moment inside them: a press already inside an orb that would crash is moved 1-6 ticks later in the orb if that survives, the orb timing that worked at a spot before is tried first, and predictions also try clicking later orbs 3 and 6 ticks into them.","v":true},{"id":"cube-late-crash","n":"Cube: ignore crashes after (ticks)","t":"int","d":"If pressing now only crashes after a normal cube / ball jump would have landed, the crash is the next obstacle's, not this click's: no delay can help, so the mod skips the search (saves time and stutter). 90 ticks = about 0.37 s. 0 = always search.","v":90,"min":0,"max":240},{"id":"predict-moving-objects","n":"Predict moving objects (experimental)","t":"bool","d":"Spikes, saws and blocks near your path that are moving right now (move / rotate triggers) are moved along their current motion during predictions: straight lines, curved / circular paths and spinning, so saves account for where they will be. Easing (speeding up / slowing down) isn't predicted. Turn 'Don't buffer near moving objects' off when using this.","v":false},{"id":"predict-move-triggers","n":"Predict move triggers","t":"bool","d":"Spikes, blocks and orbs that a trigger ahead of you will move are predicted the way the game will move them: move triggers (offset, duration, easing), rotate triggers (spinning around their center group or in place), toggle triggers that switch a group off or on, and spawn triggers, followed through their delays to the move / rotate / toggle triggers they set off (also spawns the game already started with a delay). Moves / rotations already in progress at your click follow their real path. Plain triggers only: target / follow / aim modes and lock to player / camera aren't predicted, touch triggers only once they've fired, and spawn triggers with random delays, remaps or ordered spawning aren't followed. The mod also checks itself: when a real trigger moves something, it compares the result with what it would have predicted, and if a level's triggers keep coming out wrong it turns this off for that level (the log says so). Turn off if saves near moving parts look wrong.","v":true},{"id":"no-hitch-searches","n":"No-hitch searches","t":"bool","d":"When a search runs out of time before it tried every delay, your click waits one tick and the search goes on from there with fresh time (up to 4 times), instead of giving up on the save. The delays it already tried all crashed, so waiting a tick loses nothing, and busy parts don't stutter from long searches. If it still finds no save, the click goes through then. A new input of yours meanwhile ends the search. Turn off if clicks in busy parts feel late.","v":true},{"id":"plan-next-click","n":"Plan two clicks ahead","t":"bool","d":"When a predicted run crashes into something your next click would handle (after an orb, or right after a mode portal), the ghost tries one more click (at least 24 ticks later). If that saves it, the crash isn't blamed on this click: an orb click is left alone or moved to a timing that works with your next click, and inputs before a portal aren't delayed for nothing. Turn off if saves after orbs / portals feel late.","v":true},{"id":"robust-saves","n":"Robust saves","t":"bool","d":"Before a save is used, it is also tested with you slightly ahead of and behind your real position (about half a tick). Saves that only work at the exact spot are swapped for a nearby delay that survives all three, if there is one. Costs a few extra predictions per save, never per normal click.","v":true},{"id":"ignore-touching-hazards","n":"Ignore hazards you're touching","t":"bool","d":"Spikes / saws that overlap you at the moment of the click while you're alive can't be what kills you (e.g. a spike the level makes follow the player, or noclip), so predictions ignore them. Fixes predictions that died on their very first tick (GRIEF's wave).","v":true},{"id":"death-log","n":"Death log (debug)","t":"bool","d":"On every 'no save', log what killed the prediction ghost (object ID, type, where it is relative to you, hitboxes). Ghost deaths in the first 3 ticks are always logged. Use it with F8 when a level predicts badly.","v":false},{"id":"explain-inputs","n":"Explain every input (debug)","t":"bool","d":"Also log the inputs that were passed straight to the game and why: safe as it is, spam guard, late-crash rule, max delay 0. Busy log; turn on to see what the mod does in a part, then use F8.","v":false},{"id":"remove-watermark","n":"Remove watermark","t":"bool","d":"Hide the 'CBF | stage' label shown in the bottom left of levels while the buffer is on.","v":false},{"id":"hide-menu-buttons","n":"Hide menu buttons","t":"bool","d":"Hide the heart buttons on the main menu and the pause menu. The menu still opens with Right Shift (or the menu key). Phones without a keyboard: turn this off here to get the buttons back.","v":false},{"id":"cbf-sync","n":"Click Between Frames sync","t":"bool","d":"With the Click Between Frames mod, a click lands partway through a physics tick. The prediction then starts from that exact moment, and delayed inputs land on the tick the prediction tested. Has no effect without CBF.","v":true},{"id":"low-latency","n":"Low latency mode","t":"bool","d":"For players who feel the buffer as lag or delayed clicks: clicks made while a delay is waiting are not shifted after it (no chain of delayed clicks), delays are at most 1 frame, searches are capped at 3 ms (no frame hitches), and robust saves / wave margin (which can add a tick) are off. On by default, and the same in every level.","v":true},{"id":"ufo-smart","n":"UFO: smart flaps","t":"bool","d":"A UFO crash only counts if one more flap 6 / 12 / 18 ticks before it couldn't have saved you, landing on something counts as safe, the smallest delay that works wins, and fast flapping goes straight through (spam guard). Off = UFO uses the plain rules like before.","v":true},{"id":"more-time-death-spots","n":"More time at spots you keep dying","t":"bool","d":"At a spot where level memory has seen you die 2+ times, an input that is only safe if your next input comes in time (wave / ship / UFO / spider) gets the small delay that pushes the crash furthest away, so you have more time to react. Normal play elsewhere is not affected. Needs Level memory.","v":true},{"id":"ship-spam-gap","n":"Ship: spam gap (ticks)","t":"int","d":"Ship is steered by feathering, so only taps closer together than this count as spam and go straight through. The normal spam gap (16) made almost every ship input spam, so ship was barely buffered. 4 ticks = 1 frame at 60fps.","v":6,"min":2,"max":40},{"id":"ball-smart","n":"Ball: smart flips","t":"bool","d":"Ball flips that land after only a few ticks (tight corridors) count as landings, a flip is only called safe after rolling 8 ticks on the new surface (spikes right after the landing spot), and fast flipping goes straight through (spam guard).","v":true},{"id":"swing-smart","n":"Swing: smart flips","t":"bool","d":"A swing flip counts as safe if one more flip in time would have saved it (like the UFO), and fast flipping goes straight through (spam guard).","v":true},{"id":"training-mode","n":"Training mode (hints only)","t":"bool","d":"The buffer still predicts every input but never delays it. When an input would have been saved, a hint shows how early you were (e.g. 'click 0.5f early'), so you learn the timing yourself.","v":false},{"id":"per-level-settings","n":"Per-level settings","t":"bool","d":"The menu switches are remembered for each level and come back when you open it again. Your stage (key 6) and low latency are the same in every level. Off by default: every level uses the same switches.","v":false},{"id":"death-heatmap","n":"Death heatmap","t":"bool","d":"Red marks on the progress bar where level memory saw you die; brighter = more deaths.","v":true},{"id":"save-ding","n":"Ding on save","t":"bool","d":"Plays a short ding every time the buffer saves one of your clicks.","v":true},{"id":"save-flash","n":"Flash when save","t":"bool","d":"Flashes the screen green every time the buffer saves one of your clicks.","v":false},{"id":"performance-mode","n":"Performance mode","t":"bool","d":"For PCs that drop frames when you click: predictions get at most 4 ms per click, no extra robustness checks, orbs are only tried with a normal click (no late-click retries), and the drift check and live path view are off. Saves can be a little less precise.","v":false},{"id":"predict-through-portals","n":"Predict through portals","t":"bool","d":"Predictions keep going through mode portals (cube, ship, ball, UFO, wave, robot, spider, swing): the hidden ghost switches mode there instead of the prediction stopping, so clicks right before a portal can be saved. The new mode's floor / ceiling isn't known to the prediction. Teleport portals move the ghost to the orange end, and after a solo portal only P1 goes on (v2.84). After a dual portal P2 appears with P1, upside down, and both go on (v2.85). Teleports with forces / redirects / gravity changes still stop it. Turn off if saves around portals look wrong.","v":true},{"id":"auto-budget","n":"Auto time budget","t":"bool","d":"While the game is already dropping frames (a frame took over twice as long as it should, and over 20 ms), clicks get at most 4 ms of prediction time so it doesn't get worse. Otherwise the time budget setting is used as it is.","v":true},{"id":"menu-theme","n":"Menu theme","t":"string","d":"Colours of the in-game menu.","v":"Purple","opts":["Purple","Pink","Blue","Green","Dark"]},{"id":"bind-stage","n":"Key: change stage","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["Six"]},{"id":"bind-menu","n":"Key: open menu","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["Seven"]},{"id":"bind-export","n":"Key: copy console log","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F8"]},{"id":"bind-console","n":"Key: show / hide console","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F9"]},{"id":"bind-path","n":"Key: path view","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F10"]},{"id":"bind-forget","n":"Key: forget this level","t":"keybind","d":"Works inside a level. Change it here or in Geode's keybinds popup.","v":["F11"]},{"id":"tps","n":"Physics TPS","t":"int","d":"Physics steps per second in levels. 240 is the normal game. Higher values change the physics, so runs at anything but 240 aren't legit completions. The buffer's windows scale with it automatically.","v":240,"min":240,"max":1000}];
+const KEYN = { Zero: '0', One: '1', Two: '2', Three: '3', Four: '4', Five: '5', Six: '6', Seven: '7', Eight: '8', Nine: '9' };
+const TYPE_PT = { bool: 'liga/desliga', int: 'inteiro', float: 'decimal', keybind: 'tecla', string: 'opção' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function fmtDefault(s) {
+  if (s.t === 'bool') return s.v ? 'ligado' : 'desligado';
+  if (s.t === 'keybind') return (s.v || []).map(k => KEYN[k] || k).join(', ') || 'nenhuma';
+  if (s.t === 'int' && /ticks/i.test(s.n) && s.v) return s.v + ' (' + (s.v / 4).toString().replace('.', ',') + 'f)';
+  return String(s.v);
+}
+let sxAll = false, sxF = 'all';
+function hl(text, q) {
+  const t = esc(text); if (!q) return t;
+  const i = t.toLowerCase().indexOf(q.toLowerCase());
+  return i < 0 ? t : t.slice(0, i) + '<mark>' + t.slice(i, i + q.length) + '</mark>' + t.slice(i + q.length);
+}
+function renderSettings() {
+  const q = $('#sxQ').value.trim();
+  const ql = q.toLowerCase();
+  const list = SETTINGS.filter(s => {
+    if (sxF === 'bool' && s.t !== 'bool') return false;
+    if (sxF === 'num' && !(s.t === 'int' || s.t === 'float')) return false;
+    if (sxF === 'keybind' && s.t !== 'keybind') return false;
+    if (sxF === 'debug' && !/debug/i.test(s.n)) return false;
+    return !ql || (s.n + ' ' + s.id + ' ' + s.d).toLowerCase().includes(ql);
+  });
+  const show = (sxAll || q || sxF !== 'all') ? list : list.slice(0, 10);
+  $('#sxList').innerHTML = show.map((s, i) =>
+    '<article class="sx" style="animation-delay:' + Math.min(i, 12) * 25 + 'ms"><div class="sx-top"><b>' + hl(s.n, q) + '</b><span class="sx-type ' + s.t + '">' + TYPE_PT[s.t] + '</span></div><p>' + hl(s.d, q) + '</p><div class="sx-meta"><span>' + hl(s.id, q) + '</span><span>padrão <em>' + esc(fmtDefault(s)) + '</em></span>' +
+    ('min' in s ? '<span>faixa <em>' + s.min + '–' + s.max + '</em></span>' : '') +
+    (s.opts ? '<span>opções <em>' + s.opts.join(' · ') + '</em></span>' : '') +
+    (s.pl ? '<span>só <em>' + s.pl.join(', ') + '</em></span>' : '') + '</div></article>').join('') ||
+    '<p style="color:var(--muted)">Nenhuma configuração com "' + esc(q) + '". Tente outra palavra, como wave ou orb.</p>';
+  $('#sxCount').textContent = list.length + ' de ' + SETTINGS.length;
+  const more = $('#sxMore');
+  more.hidden = sxAll || !!q || sxF !== 'all' || list.length <= 10;
+  more.textContent = 'Mostrar todas as ' + SETTINGS.length;
+}
+$('#sxTotal').textContent = SETTINGS.length;
+$('#sxQ').addEventListener('input', renderSettings);
+$$('#sxF button').forEach(b => b.addEventListener('click', () => {
+  sxF = b.dataset.f; $$('#sxF button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderSettings();
+}));
+$('#sxMore').addEventListener('click', () => { sxAll = true; renderSettings(); });
+renderSettings();
+
+/* ---------- download ---------- */
+$('#copySha').addEventListener('click', () => copyText($('#sha').textContent.replace('sha256:', ''), 'SHA-256 copiado'));
+
+/* ---------- diagram ruler ---------- */
+(() => {
+  const g = document.getElementById('ruler'); let s = '';
+  for (let t = 0; t <= 140; t += 4) {
+    const x = 226 + t * 6;
+    if (x > 920) break;
+    const big = t % 20 === 0;
+    s += '<line x1="' + x + '" y1="250" x2="' + x + '" y2="' + (big ? 262 : 256) + '" stroke="#9ccfff" stroke-opacity="' + (big ? .8 : .35) + '"/>';
+    if (big) s += '<text x="' + x + '" y="276" text-anchor="middle">t' + t + '</text>';
+  }
+  g.innerHTML = s;
+})();
+})();
+</script>
+</body>
+</html>
