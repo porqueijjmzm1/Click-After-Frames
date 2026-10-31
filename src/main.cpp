@@ -1,4 +1,4 @@
-// Click Before Frames v2.9 (cube-style wave, wave auto-release, orb alignment, full ghost state, drift check, in-game console on F9)
+// Input Buffer (was Click Before Frames) v2.9 (cube-style wave, wave auto-release, orb alignment, full ghost state, drift check, in-game console on F9)
 //
 // When you click (or release, in wave / robot), a hidden "ghost" player is simulated
 // ahead with your input. If the ghost dies, the input is retried with 1..N ticks of
@@ -277,6 +277,7 @@ namespace {
         bool perLevel = true;        // v2.51: stage + switches remembered per level
         bool heatmap = true;         // v2.51: death marks on the progress bar
         bool saveDing = true;        // v2.56: ding when a click is saved
+        bool saveFlash = false;      // v2.101: green screen flash when a click is saved
         CCLabelBMFont* hintLabel = nullptr;  // v2.51: training hint ("2t early")
         CCDrawNode* heatNode = nullptr;      // v2.51: death marks on the progress bar
         bool ufoSmart = true;        // v2.40: UFO landing + "could you have flapped again" scoring
@@ -372,7 +373,7 @@ namespace {
         if (starts("drift")) return { 255, 240, 150 };
         if (starts("ghost killed") || starts("  hitbox")) return { 255, 120, 120 };
         if (starts("perf")) return { 150, 200, 255 };
-        if (starts("Stage") || starts("v2") || starts("path") || starts("Click") || starts("CBF")) return { 255, 215, 90 };
+        if (starts("Stage") || starts("v2") || starts("path") || starts("Click") || starts("Input") || starts("CBF")) return { 255, 215, 90 };
         if (starts("pass")) return { 140, 150, 170 };
         if (starts("memory")) return { 255, 150, 220 };
         if (starts("console")) return { 150, 255, 200 };
@@ -609,6 +610,7 @@ namespace {
         buf.perLevel = mod->getSettingValue<bool>("per-level-settings");
         buf.heatmap = mod->getSettingValue<bool>("death-heatmap");
         buf.saveDing = mod->getSettingValue<bool>("save-ding");
+        buf.saveFlash = mod->getSettingValue<bool>("save-flash");
         buf.moreTime = mod->getSettingValue<bool>("more-time-death-spots");
         buf.dashAutoRelease = mod->getSettingValue<bool>("dash-auto-release");
         buf.perfLog = mod->getSettingValue<bool>("perf-log");
@@ -760,7 +762,7 @@ namespace {
         auto* mod = Mod::get();
         auto* layer = GameManager::get()->m_playLayer;
         std::string text;
-        text += fmt::format("Click Before Frames {} console export\n", mod->getVersion().toVString());
+        text += fmt::format("Input Buffer {} console export\n", mod->getVersion().toVString());
         if (layer && layer->m_level) {
             text += fmt::format("Level: {} (id {}){}\n", std::string(layer->m_level->m_levelName), layer->m_level->m_levelID.value(),
                 layer->m_isPracticeMode ? ", practice" : "");
@@ -3573,6 +3575,20 @@ namespace {
         if (buf.saveDing && !buf.train) {
             FMODAudioEngine::sharedEngine()->playEffect("counter003.ogg");
         }
+        // v2.101: a quick green flash over the whole screen (one layer, restarted on each save)
+        if (buf.saveFlash && !buf.train) {
+            auto* flash = static_cast<CCLayerColor*>(layer->getChildByID("save-flash"_spr));
+            if (!flash) {
+                auto win = CCDirector::get()->getWinSize();
+                flash = CCLayerColor::create({ 60, 255, 110, 0 }, win.width, win.height);
+                flash->setID("save-flash"_spr);
+                flash->setZOrder(999);
+                layer->addChild(flash);
+            }
+            flash->stopAllActions();
+            flash->setOpacity(80);
+            flash->runAction(CCFadeTo::create(0.3f, 0));
+        }
     }
 
     std::string attemptSummary() {
@@ -4808,6 +4824,7 @@ class BufferMenu : public geode::Popup {
         { "explain-inputs", "Explain inputs" },
         { "remove-watermark", "Remove watermark" },
         { "hide-menu-buttons", "Hide menu buttons" },
+        { "save-flash", "Flash when save" },
     };
     static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Custom", "Tools" };
 
@@ -5163,7 +5180,7 @@ private:
         circle(moon, { 11.f, 0.f }, 1.7f, col({ 255, 255, 255 }, 1.f), 12);
         orbit->addChild(moon);
         orbit->runAction(CCRepeatForever::create(CCRotateBy::create(4.f, -360.f)));
-        label(m_mainLayer, "CLICK BEFORE FRAMES", 0.56f, m_text, { 38.f, H - TITLE / 2.f }, { 0.f, 0.5f }, true);
+        label(m_mainLayer, "INPUT BUFFER", 0.56f, m_text, { 38.f, H - TITLE / 2.f }, { 0.f, 0.5f }, true);
         label(m_mainLayer, Mod::get()->getVersion().toVString(), 0.4f, m_muted, { W - 38.f, H - TITLE / 2.f }, { 1.f, 0.5f });
 
         m_frameMenu = CCMenu::create();
@@ -5728,7 +5745,7 @@ $on_mod(Loaded) {
         AllocConsole();
         FILE* out = nullptr;
         freopen_s(&out, "CONOUT$", "w", stdout);
-        SetConsoleTitleA("Click Before Frames - Live Console");
+        SetConsoleTitleA("Input Buffer - Live Console");
     }
 #endif
     if (Loader::get()->isModLoaded("syzzi.click_between_frames")) {
@@ -5737,7 +5754,7 @@ $on_mod(Loaded) {
     if (Loader::get()->isModLoaded("square3ang.cbfextrapolate")) {
         say("CBF Extrapolate detected: visual only, predictions unaffected");
     }
-    say("v2.100.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
+    say("v2.101.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
 }
 
 class $modify(BufPlayLayer, PlayLayer) {
@@ -5860,7 +5877,7 @@ class $modify(BufPlayLayer, PlayLayer) {
             buf.panel->addChild(frame);
         }
 
-        auto* title = CCLabelBMFont::create("Click Before Frames", "goldFont.fnt");
+        auto* title = CCLabelBMFont::create("Input Buffer", "goldFont.fnt");
         title->setScale(0.55f);
         title->setAnchorPoint({ 0.f, 0.5f });
         title->setPosition({ 10.f, H - 14.f });

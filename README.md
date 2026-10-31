@@ -85,3 +85,4 @@ Practice use only; do not use for verified or leaderboard runs.
 - v2.98: automatic updates removed (no update check, no popup, no downloads from GitHub; the "Check for updates" setting is gone).
 - v2.99: "Remove watermark" setting (off by default, also a switch in the menu's Tools tab) hides the "CBF | stage" label in levels.
 - v2.100: "Hide menu buttons" setting (off by default, also a switch in the Tools tab) hides the heart buttons on the main menu and pause menu; Right Shift opens / closes the menu in a level and on the main menu.
+- v2.101: renamed to "Input Buffer" (developer timbodev); "Flash when save" setting (off by default, also a switch in the Tools tab) flashes the screen green on every save.

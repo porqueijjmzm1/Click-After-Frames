@@ -5,10 +5,10 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v2.100.0",
+	"version": "v2.101.0",
 	"id": "basu.input-buffer",
-	"name": "Click Before Frames",
-	"developer": "BASU",
+	"name": "Input Buffer",
+	"developer": "timbodev",
 	"description": "Trajectory-based input buffer: delays early clicks/releases by up to 8+ frames, with orb, pad and portal-aware prediction. github.com/raresdalas1009/-predictive-input-buffer",
 	"settings": {
 		"custom-ticks": {
@@ -373,6 +373,12 @@
 			"name": "Ding on save",
 			"description": "Plays a short ding every time the buffer saves one of your clicks.",
 			"default": true
+		},
+		"save-flash": {
+			"type": "bool",
+			"name": "Flash when save",
+			"description": "Flashes the screen green every time the buffer saves one of your clicks.",
+			"default": false
 		},
 		"performance-mode": {
 			"type": "bool",
