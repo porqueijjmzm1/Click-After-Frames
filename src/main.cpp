@@ -4783,10 +4783,10 @@ namespace {
     }
 }
 
-// v2.88 menu: a draggable window in a space theme (night-sky gradient, nebula, twinkling
-// stars, the odd shooting star) with a tab for each category: Buffer, Prediction, Modes,
-// Custom (each game mode's own frames) and Tools. Opens with the menu key in a level or the
-// heart button on the main menu.
+// v3.0 menu: a clean dark window. A header with the mouse icon and a live status pill, a
+// sidebar of tabs (Buffer, Prediction, Modes, Frames, Tools) and pages made of tiles you can
+// tap anywhere to switch. Drag it by the header. Opens with the menu key or Right Shift in a
+// level, or the mouse button on the main and pause menus.
 class BufferMenu : public geode::Popup {
     struct Option {
         char const* key;    // mod setting, or nullptr for the runtime path view
@@ -4820,44 +4820,57 @@ class BufferMenu : public geode::Popup {
         { "training-mode", "Training (hints)" },
         { "death-heatmap", "Death heatmap" },
         { "save-ding", "Ding on save" },
+        { "save-flash", "Flash when save" },
         { "performance-mode", "Performance mode" },
         { "explain-inputs", "Explain inputs" },
         { "remove-watermark", "Remove watermark" },
         { "hide-menu-buttons", "Hide menu buttons" },
-        { "save-flash", "Flash when save" },
     };
-    static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Custom", "Tools" };
+    static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Frames", "Tools" };
+    static constexpr char const* TAB_INFO[] = {
+        "How far back an early click can be held.",
+        "What the hidden ghost checks before a click goes through.",
+        "Helpers for each game mode, and latency.",
+        "Your own limit for each game mode. 0 = no buffer.",
+        "What you see while playing, stats and the log.",
+    };
+    // one chip per stage, in STAGES order
+    static constexpr char const* STAGE_CHIPS[] = { "0.5f", "1f", "2f", "4f", "6f", "8f", "Custom", "Off" };
+    static_assert(static_cast<int>(std::size(STAGE_CHIPS)) == STAGE_COUNT);
 
     struct Theme {
-        ccColor3B main, soft, accent, bg;
-        char const* button;
+        ccColor3B main, soft;
     };
 
 public:
-    // the "Menu theme" setting picks the accent colour (purple by default)
+    // the "Menu theme" setting picks the accent colour (blue by default)
     static Theme currentTheme() {
         auto name = Mod::get()->getSettingValue<std::string>("menu-theme");
-        if (name == "Pink") {
-            return { { 255, 120, 200 }, { 255, 205, 230 }, { 215, 190, 255 }, { 255, 195, 235 }, "GJ_button_02.png" };
+        if (name == "Purple") {
+            return { { 146, 108, 255 }, { 208, 192, 255 } };
         }
-        if (name == "Blue") {
-            return { { 90, 170, 255 }, { 205, 228, 255 }, { 170, 210, 255 }, { 170, 205, 255 }, "GJ_button_06.png" };
+        if (name == "Pink") {
+            return { { 255, 98, 176 }, { 255, 192, 226 } };
         }
         if (name == "Green") {
-            return { { 90, 225, 150 }, { 210, 255, 220 }, { 180, 240, 200 }, { 170, 235, 190 }, "GJ_button_01.png" };
+            return { { 52, 205, 124 }, { 178, 242, 204 } };
         }
         if (name == "Dark") {
-            return { { 170, 150, 230 }, { 225, 225, 235 }, { 170, 170, 190 }, { 90, 85, 110 }, "GJ_button_04.png" };
+            return { { 122, 130, 148 }, { 226, 230, 238 } };
         }
-        return { { 166, 107, 255 }, { 220, 195, 255 }, { 200, 170, 255 }, { 205, 170, 255 }, "GJ_button_02.png" };
+        return { { 62, 152, 255 }, { 176, 214, 255 } };
     }
 
 private:
-    static constexpr float W = 430.f;
-    static constexpr float H = 272.f;
-    static constexpr float TITLE = 28.f;
-    static constexpr float SIDE = 100.f;
-    static constexpr float ROW = 21.f;
+    static constexpr float W = 440.f;
+    static constexpr float H = 276.f;
+    static constexpr float HEADER = 36.f;
+    static constexpr float SIDE = 118.f;
+    static constexpr float L = SIDE + 2.f;   // left edge of the page content
+    static constexpr float R = W - 12.f;     // right edge of the page content
+    static constexpr float CW = R - L;       // page content width
+    static constexpr float TILE_H = 24.f;
+    static constexpr float PITCH = 28.f;
 
     static inline BufferMenu* s_open = nullptr;
     static inline int s_tab = 0;
@@ -4865,9 +4878,11 @@ private:
     static inline CCPoint s_pos {};
 
     Theme m_t = currentTheme();
-    ccColor3B m_text { 232, 234, 255 };
-    ccColor3B m_muted { 142, 148, 190 };
-    ccColor3B m_cyan { 110, 230, 255 };
+    ccColor3B m_text { 236, 239, 245 };
+    ccColor3B m_muted { 140, 148, 168 };
+    ccColor3B m_dim { 96, 103, 122 };
+    ccColor3B m_good { 80, 222, 140 };
+    ccColor3B m_bad { 240, 92, 104 };
 
     CCMenu* m_frameMenu = nullptr;
     CCNode* m_tabsNode = nullptr;
@@ -4876,9 +4891,20 @@ private:
     CCLabelBMFont* m_stage = nullptr;
     CCLabelBMFont* m_status = nullptr;
     CCLabelBMFont* m_tpsLabel = nullptr;
+    CCLabelBMFont* m_saves = nullptr;
+    CCLabelBMFont* m_pillLabel = nullptr;
+    CCDrawNode* m_pill = nullptr;
+
+    // tiles with a switch: their drawing, label and size, refreshed together
+    struct Tile {
+        CCDrawNode* draw;
+        CCLabelBMFont* label;
+        CCSize size;
+    };
     std::vector<Option const*> m_options;
-    std::vector<CCDrawNode*> m_switches;
-    std::vector<CCLabelBMFont*> m_switchLabels;
+    std::vector<Tile> m_tiles;
+    Tile m_perModeTile { nullptr, nullptr, {} };
+
     std::array<CCLabelBMFont*, 8> m_modeValues {};
     struct ModeSlider {
         int mode;
@@ -4887,17 +4913,19 @@ private:
     };
     std::vector<ModeSlider> m_sliders;
     int m_dragSlider = -1;
-    CCDrawNode* m_perModeSwitch = nullptr;
     bool m_dragging = false;
-    float m_shootTimer = 2.f;
+    float m_liveTimer = 0.f;
 
     static constexpr int TPS_MIN = 240;
     static constexpr int TPS_MAX = 1000;
 
-    // CCDrawNode blends premultiplied colours: a see-through colour has to be darkened by its
-    // alpha (v2.88's white cards and bright blocks were plain colours drawn at full strength)
+    // CCDrawNode blends premultiplied colours: a see-through colour has to be darkened by its alpha
     static ccColor4F col(ccColor3B c, float a) {
         return { c.r / 255.f * a, c.g / 255.f * a, c.b / 255.f * a, a };
+    }
+
+    static ccColor4F white(float a) {
+        return col({ 255, 255, 255 }, a);
     }
 
     // a filled circle as a polygon (the game's drawDot draws squares)
@@ -4921,8 +4949,7 @@ private:
             for (int i = 0; i <= 6; ++i) {
                 float a = (c * 90.f + i * 15.f) * 3.14159265f / 180.f;
                 CCPoint p { centers[c].x + rad * std::cos(a), centers[c].y + rad * std::sin(a) };
-                // v2.88.2: no repeated points (where corners meet on round shapes): the outline
-                // turned a zero-length edge into a stray line sticking out of every round button
+                // no repeated points where corners meet: a zero-length edge draws a stray line
                 if (pts.empty() || ccpDistance(pts.back(), p) > 0.05f) {
                     pts.push_back(p);
                 }
@@ -4934,22 +4961,14 @@ private:
         d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
     }
 
-    // v2.89 fonts (bundled, OFL): Orbitron for titles, tabs and headings, Exo 2 for the rest
-    static char const* bodyFont() {
+    // the bundled Exo 2 font (OFL) for everything
+    static char const* font() {
         return "exo2.fnt"_spr;
     }
 
-    static char const* headFont() {
-        return "orbitron.fnt"_spr;
-    }
-
-    static constexpr float BODY_K = 1.f;   // size of Exo 2 next to the old chat font
-    static constexpr float HEAD_K = 0.8f;  // Orbitron is wide
-
-    CCLabelBMFont* label(CCNode* parent, std::string const& str, float scale, ccColor3B color, CCPoint at, CCPoint anchor = { 0.5f, 0.5f },
-        bool head = false) {
-        auto* l = CCLabelBMFont::create(str.c_str(), head ? headFont() : bodyFont());
-        l->setScale(scale * (head ? HEAD_K : BODY_K));
+    CCLabelBMFont* label(CCNode* parent, std::string const& str, float scale, ccColor3B color, CCPoint at, CCPoint anchor = { 0.5f, 0.5f }) {
+        auto* l = CCLabelBMFont::create(str.c_str(), font());
+        l->setScale(scale);
         l->setColor(color);
         l->setAnchorPoint(anchor);
         l->setPosition(at);
@@ -4957,20 +4976,23 @@ private:
         return l;
     }
 
-    // a flat pill button: filled with the accent (primary) or glassy with an accent edge
+    // a rounded button: filled with the accent (primary) or a quiet glass one
     CCMenuItemSpriteExtra* button(CCMenu* menu, std::string const& str, SEL_MenuHandler handler, CCPoint center, float width,
-        bool primary = false, int tag = 0, float height = 18.f) {
+        bool primary = false, int tag = 0, float height = 20.f) {
         auto* node = CCNode::create();
         node->setContentSize({ width, height });
         auto* d = CCDrawNode::create();
-        roundRect(d, { 0.f, 0.f, width, height }, height / 2.f, primary ? col(m_t.main, 0.9f) : col({ 255, 255, 255 }, 0.07f), 0.6f,
-            col(primary ? m_t.soft : m_t.main, primary ? 0.6f : 0.55f));
+        if (primary) {
+            roundRect(d, { 0.f, 0.f, width, height }, 6.f, col(m_t.main, 1.f));
+        }
+        else {
+            roundRect(d, { 0.f, 0.f, width, height }, 6.f, white(0.06f), 0.5f, white(0.1f));
+        }
         node->addChild(d);
-        auto* l = CCLabelBMFont::create(str.c_str(), bodyFont());
-        l->setScale(0.5f * BODY_K);
+        auto* l = CCLabelBMFont::create(str.c_str(), font());
         l->setColor(primary ? ccColor3B { 255, 255, 255 } : m_text);
         l->setPosition({ width / 2.f, height / 2.f + 0.5f });
-        l->limitLabelWidth(width - 8.f, 0.5f * BODY_K, 0.2f);
+        l->limitLabelWidth(width - 8.f, 0.46f, 0.2f);
         node->addChild(l);
         auto* item = CCMenuItemSpriteExtra::create(node, this, handler);
         item->m_scaleMultiplier = 1.05f;
@@ -4980,29 +5002,45 @@ private:
         return item;
     }
 
-    void drawSwitch(CCDrawNode* d, bool on) {
+    // a tile: a soft card that lights up in the accent when on, with a switch on the right
+    void drawTile(Tile const& t, bool on) {
+        auto* d = t.draw;
+        float w = t.size.width, h = t.size.height;
         d->clear();
-        roundRect(d, { 0.f, 0.f, 26.f, 13.f }, 6.5f, on ? col(m_t.main, 0.95f) : col({ 70, 74, 110 }, 0.9f), 0.5f,
-            col(on ? m_t.soft : ccColor3B { 110, 115, 160 }, 0.6f));
-        if (on) {
-            circle(d, { 19.5f, 6.5f }, 7.f, col(m_cyan, 0.18f));
+        roundRect(d, { 0.f, 0.f, w, h }, 6.f, on ? col(m_t.main, 0.15f) : white(0.035f), 0.5f, on ? col(m_t.main, 0.55f) : white(0.07f));
+        float sw = 22.f, sh = 12.f;
+        float sx = w - sw - 7.f, sy = (h - sh) / 2.f;
+        roundRect(d, { sx, sy, sw, sh }, sh / 2.f, on ? col(m_t.main, 1.f) : white(0.13f));
+        circle(d, { on ? sx + sw - sh / 2.f : sx + sh / 2.f, sy + sh / 2.f }, sh / 2.f - 2.f, white(on ? 1.f : 0.75f), 20);
+        if (t.label) {
+            t.label->setColor(on ? m_text : m_muted);
         }
-        circle(d, { on ? 19.5f : 6.5f, 6.5f }, 4.6f, col({ 255, 255, 255 }, on ? 1.f : 0.8f));
     }
 
-    CCMenuItemSpriteExtra* switchItem(CCPoint center, bool on, SEL_MenuHandler handler, int tag, CCDrawNode** out) {
+    // a tappable tile centred on `center`; the whole tile is the button
+    Tile tileItem(std::string const& text, CCPoint center, float w, SEL_MenuHandler handler, int tag) {
         auto* node = CCNode::create();
-        node->setContentSize({ 26.f, 13.f });
+        node->setContentSize({ w, TILE_H });
         auto* d = CCDrawNode::create();
         node->addChild(d);
-        drawSwitch(d, on);
+        auto* l = CCLabelBMFont::create(text.c_str(), font());
+        l->setAnchorPoint({ 0.f, 0.5f });
+        l->setPosition({ 9.f, TILE_H / 2.f + 0.5f });
+        l->limitLabelWidth(w - 44.f, 0.46f, 0.2f);
+        node->addChild(l, 1);
         auto* item = CCMenuItemSpriteExtra::create(node, this, handler);
-        item->m_scaleMultiplier = 1.08f;
+        item->m_scaleMultiplier = 1.03f;
         item->setTag(tag);
         item->setPosition(center);
         m_pageMenu->addChild(item);
-        *out = d;
-        return item;
+        return { d, l, { w, TILE_H } };
+    }
+
+    // a quiet card behind something that isn't a button
+    void card(CCRect r) {
+        auto* d = CCDrawNode::create();
+        roundRect(d, r, 6.f, white(0.035f), 0.5f, white(0.07f));
+        m_page->addChild(d, 1);
     }
 
     // your icon for a game mode (MODE_NAMES order = the game's icon types), in your colours
@@ -5017,7 +5055,7 @@ private:
         if (gm->getPlayerGlow()) {
             icon->setGlowOutline(gm->colorForIdx(gm->getPlayerGlowColor()));
         }
-        icon->setScale(mode == 5 || mode == 6 ? 0.42f : 0.5f);
+        icon->setScale(mode == 5 || mode == 6 ? 0.36f : 0.42f);
         return icon;
     }
 
@@ -5025,178 +5063,125 @@ private:
         return o.key ? Mod::get()->getSettingValue<bool>(o.key) : buf.showPath;
     }
 
-    // a switch row: label on the left, switch on the right
-    void optionRow(Option const& o, float x, float y, float width) {
-        CCDrawNode* d = nullptr;
-        switchItem({ x + width - 15.f, y }, optionValue(o), menu_selector(BufferMenu::onToggle), static_cast<int>(m_options.size()), &d);
-        auto* l = label(m_page, o.label, 0.52f, optionValue(o) ? m_text : m_muted, { x, y }, { 0.f, 0.5f });
-        l->limitLabelWidth(width - 36.f, 0.52f, 0.2f);
-        m_options.push_back(&o);
-        m_switches.push_back(d);
-        m_switchLabels.push_back(l);
-    }
-
+    // two columns of switch tiles, the first row centred on `top`
     void optionGrid(Option const* options, size_t count, float top) {
-        float left = SIDE + 14.f;
-        float colW = (W - SIDE - 34.f) / 2.f;
+        float w = (CW - 8.f) / 2.f;
         size_t rows = (count + 1) / 2;
         for (size_t i = 0; i < count; ++i) {
-            float x = left + (i / rows) * (colW + 10.f);
-            float y = top - (i % rows) * ROW;
-            optionRow(options[i], x, y, colW);
+            float x = L + w / 2.f + (i / rows) * (w + 8.f);
+            float y = top - (i % rows) * PITCH;
+            m_tiles.push_back(tileItem(options[i].label, { x, y }, w, menu_selector(BufferMenu::onToggle), static_cast<int>(m_options.size())));
+            m_options.push_back(&options[i]);
+        }
+    }
+
+    // a small icon for each tab, drawn
+    void glyph(CCDrawNode* d, int tab, CCPoint c, ccColor4F color) {
+        switch (tab) {
+            case 0:  // stacked bars: the buffer
+                for (int i = -1; i <= 1; ++i) {
+                    d->drawSegment({ c.x - 4.f, c.y + i * 3.2f }, { c.x + (i == 1 ? 1.5f : 4.f), c.y + i * 3.2f }, 0.75f, color);
+                }
+                break;
+            case 1:  // a rising row of dots: the predicted path
+                circle(d, { c.x - 4.f, c.y - 3.f }, 1.2f, color, 10);
+                circle(d, { c.x, c.y - 0.5f }, 1.4f, color, 10);
+                circle(d, { c.x + 4.f, c.y + 3.f }, 1.7f, color, 12);
+                break;
+            case 2:  // a cube
+                roundRect(d, { c.x - 4.f, c.y - 4.f, 8.f, 8.f }, 1.5f, { 0, 0, 0, 0 }, 0.7f, color);
+                roundRect(d, { c.x - 1.5f, c.y - 1.5f, 3.f, 3.f }, 0.6f, color);
+                break;
+            case 3:  // a slider
+                d->drawSegment({ c.x - 5.f, c.y }, { c.x + 5.f, c.y }, 0.6f, color);
+                circle(d, { c.x + 1.5f, c.y }, 2.3f, color, 14);
+                break;
+            default:  // four squares: the toolbox
+                for (int i = 0; i < 4; ++i) {
+                    float x = c.x + (i % 2 ? 0.8f : -3.8f), y = c.y + (i / 2 ? 0.8f : -3.8f);
+                    roundRect(d, { x, y, 3.f, 3.f }, 0.6f, color);
+                }
+                break;
         }
     }
 
     // ---------- the window ----------
 
     void buildFrame() {
-        // a soft glow around the window: rings of the accent fading outwards
-        auto* glow = CCDrawNode::create();
-        for (int i = 7; i >= 1; --i) {
-            float g = i * 1.7f;
-            roundRect(glow, { -g, -g, W + 2.f * g, H + 2.f * g }, 12.f + g, col(m_t.main, 0.022f));
+        auto* d = CCDrawNode::create();
+        // a soft shadow under the window
+        for (int i = 6; i >= 1; --i) {
+            float g = i * 1.6f;
+            roundRect(d, { -g, -g - 2.f, W + 2.f * g, H + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
         }
-        m_mainLayer->addChild(glow, -3);
+        // the window, the header line and the sidebar panel
+        roundRect(d, { 0.f, 0.f, W, H }, 12.f, col({ 15, 17, 23 }, 0.98f), 0.6f, white(0.09f));
+        roundRect(d, { 0.f, H - HEADER - 1.f, W, HEADER + 1.f }, 12.f, white(0.02f));
+        d->drawSegment({ 1.f, H - HEADER }, { W - 1.f, H - HEADER }, 0.4f, white(0.07f));
+        roundRect(d, { 8.f, 8.f, SIDE - 14.f, H - HEADER - 16.f }, 9.f, col({ 0, 0, 0 }, 0.24f), 0.5f, white(0.05f));
+        // the icon's tile
+        float cy = H - HEADER / 2.f;
+        roundRect(d, { 10.f, cy - 11.f, 22.f, 22.f }, 6.f, col(m_t.main, 0.2f), 0.6f, col(m_t.main, 0.7f));
+        m_mainLayer->addChild(d, -1);
+        // the accent fading out along the header line
+        auto* line = CCLayerGradient::create({ m_t.main.r, m_t.main.g, m_t.main.b, 220 }, { m_t.main.r, m_t.main.g, m_t.main.b, 0 }, { 1.f, 0.f });
+        line->setContentSize({ W * 0.6f, 1.f });
+        line->setPosition({ 12.f, H - HEADER - 0.5f });
+        m_mainLayer->addChild(line, 0);
 
-        // the sky, clipped to the window's shape. v2.90: a black night sky full of stars
-        auto* stencil = CCDrawNode::create();
-        roundRect(stencil, { 0.f, 0.f, W, H }, 12.f, { 1, 1, 1, 1 });
-        auto* clip = CCClippingNode::create(stencil);
-        m_mainLayer->addChild(clip, -2);
-        auto* sky = CCLayerGradient::create({ 2, 2, 7, 253 }, { 7, 5, 16, 253 });
-        sky->setContentSize({ W, H });
-        clip->addChild(sky);
-        // the faintest hint of the milky way across the sky
-        auto* haze = CCDrawNode::create();
-        for (int i = 0; i < 24; ++i) {
-            float t = i / 23.f;
-            CCPoint c { -20.f + t * (W + 40.f), H * 0.85f - t * H * 0.7f };
-            circle(haze, c, 60.f, col({ 120, 110, 200 }, 0.006f), 40);
-            circle(haze, c, 34.f, col({ 160, 150, 230 }, 0.006f), 32);
+        if (auto* mouse = CCSprite::create("mouse.png"_spr)) {
+            mouse->setScale(15.f / mouse->getContentSize().height);
+            mouse->setColor(m_t.soft);
+            mouse->setPosition({ 21.f, cy });
+            m_mainLayer->addChild(mouse, 2);
         }
-        clip->addChild(haze);
-        auto drift = [](CCNode* node, CCPoint by, float period) {
-            node->runAction(CCRepeatForever::create(CCSequence::create(CCEaseSineInOut::create(CCMoveBy::create(period, by)),
-                CCEaseSineInOut::create(CCMoveBy::create(period, ccpNeg(by))), nullptr)));
-        };
-        uint32_t seed = 1234567;
-        auto rnd = [&seed] {
-            seed = seed * 1103515245u + 12345u;
-            return static_cast<float>((seed >> 8) & 0xffff) / 65535.f;
-        };
-        auto tint = [&]() -> ccColor3B {
-            float r = rnd();
-            return r < 0.12f ? m_cyan : r < 0.22f ? ccColor3B { 255, 225, 190 } : r < 0.30f ? m_t.soft : ccColor3B { 255, 255, 255 };
-        };
-        // two layers of stars drifting at different speeds (far = small and slow, near = bigger)
-        for (int layer = 0; layer < 2; ++layer) {
-            auto* field = CCNode::create();
-            clip->addChild(field);
-            drift(field, layer == 0 ? CCPoint { -8.f, 3.f } : CCPoint { -18.f, 7.f }, layer == 0 ? 22.f : 14.f);
-            int count = layer == 0 ? 150 : 60;
-            for (int i = 0; i < count; ++i) {
-                float size = layer == 0 ? 0.5f + rnd() * 0.5f : 0.9f + rnd() * 0.8f;
-                auto* star = CCLayerColor::create({ 255, 255, 255, 255 }, size, size);
-                star->setPosition({ rnd() * (W + 50.f) - 25.f, rnd() * (H + 30.f) - 15.f });
-                star->setColor(tint());
-                GLubyte hi = static_cast<GLubyte>((layer == 0 ? 110 : 170) + rnd() * 85);
-                GLubyte lo = static_cast<GLubyte>(15 + rnd() * 45);
-                star->setOpacity(hi);
-                float t = 0.6f + rnd() * 2.2f;
-                star->runAction(CCRepeatForever::create(CCSequence::create(CCDelayTime::create(rnd() * 3.f),
-                    CCFadeTo::create(t, lo), CCFadeTo::create(t, hi), nullptr)));
-                field->addChild(star);
-            }
-            if (layer == 1) {
-                // the shiny ones: four-pointed sparkles that grow, shrink and turn
-                for (int i = 0; i < 14; ++i) {
-                    auto* glint = CCDrawNode::create();
-                    ccColor3B c = tint();
-                    float arm = 3.5f + rnd() * 3.5f;
-                    float w = arm * 0.16f;
-                    CCPoint h1[] = { { 0.f, arm }, { w, 0.f }, { 0.f, -arm }, { -w, 0.f } };
-                    CCPoint h2[] = { { arm, 0.f }, { 0.f, w }, { -arm, 0.f }, { 0.f, -w } };
-                    circle(glint, { 0.f, 0.f }, arm * 0.55f, col(c, 0.10f), 16);
-                    glint->drawPolygon(h1, 4, col(c, 0.95f), 0.f, { 0, 0, 0, 0 });
-                    glint->drawPolygon(h2, 4, col(c, 0.95f), 0.f, { 0, 0, 0, 0 });
-                    circle(glint, { 0.f, 0.f }, w * 1.3f, col({ 255, 255, 255 }, 1.f), 10);
-                    glint->setPosition({ 10.f + rnd() * (W - 20.f), 10.f + rnd() * (H - 20.f) });
-                    float s0 = 0.35f + rnd() * 0.25f;
-                    glint->setScale(s0);
-                    glint->setRotation(rnd() * 45.f);
-                    float t = 1.f + rnd() * 1.8f;
-                    glint->runAction(CCRepeatForever::create(CCSequence::create(CCDelayTime::create(rnd() * 3.f),
-                        CCEaseSineInOut::create(CCScaleTo::create(t, s0 * 2.2f)), CCEaseSineInOut::create(CCScaleTo::create(t, s0)), nullptr)));
-                    glint->runAction(CCRepeatForever::create(CCRotateBy::create(6.f + rnd() * 6.f, rnd() < 0.5f ? 45.f : -45.f)));
-                    field->addChild(glint);
-                }
-            }
-        }
-        // a light sweeping along the title line now and then
-        auto* shine = CCLayerGradient::create({ 255, 255, 255, 0 }, { 255, 255, 255, 210 }, { 1.f, 0.f });
-        shine->setContentSize({ 40.f, 1.f });
-        shine->setPosition({ -40.f, H - TITLE });
-        clip->addChild(shine, 5);
-        shine->runAction(CCRepeatForever::create(CCSequence::create(CCDelayTime::create(2.5f),
-            CCEaseSineInOut::create(CCMoveBy::create(1.6f, { W + 40.f, 0.f })), CCPlace::create({ -40.f, H - TITLE }), nullptr)));
-        m_sky = clip;
+        label(m_mainLayer, "Input Buffer", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
+        label(m_mainLayer, Mod::get()->getVersion().toVString(), 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
 
-        // edge, the sidebar's darker panel, the title's accent line
-        auto* chrome = CCDrawNode::create();
-        roundRect(chrome, { 0.f, 0.f, W, H }, 12.f, { 0, 0, 0, 0 }, 0.7f, col(m_t.main, 0.75f));
-        roundRect(chrome, { 1.5f, 1.5f, W - 3.f, H - 3.f }, 11.f, { 0, 0, 0, 0 }, 0.4f, col({ 255, 255, 255 }, 0.06f));
-        roundRect(chrome, { 7.f, 8.f, SIDE - 12.f, H - TITLE - 14.f }, 9.f, col({ 0, 0, 0 }, 0.28f), 0.4f, col({ 255, 255, 255 }, 0.05f));
-        m_mainLayer->addChild(chrome, -1);
-        auto* line = CCLayerGradient::create({ m_t.main.r, m_t.main.g, m_t.main.b, 230 }, { m_cyan.r, m_cyan.g, m_cyan.b, 0 }, { 1.f, 0.f });
-        line->setContentSize({ W - 24.f, 1.f });
-        line->setPosition({ 12.f, H - TITLE });
-        m_mainLayer->addChild(line, -1);
-
-        // the logo: a little planet with a tilted ring
-        auto* logo = CCDrawNode::create();
-        CCPoint lc { 21.f, H - TITLE / 2.f };
-        circle(logo, lc, 6.5f, col(m_t.main, 1.f));
-        circle(logo, lc + CCPoint { -1.6f, 1.8f }, 3.4f, col(m_t.soft, 0.45f));
-        std::vector<CCPoint> ring;
-        for (int i = 0; i <= 32; ++i) {
-            float a = i * 2.f * 3.14159265f / 32.f;
-            float x = 11.f * std::cos(a), y = 3.2f * std::sin(a);
-            float t = 0.38f;
-            ring.push_back(lc + CCPoint { x * std::cos(t) - y * std::sin(t), x * std::sin(t) + y * std::cos(t) });
-        }
-        for (size_t i = 0; i + 1 < ring.size(); ++i) {
-            logo->drawSegment(ring[i], ring[i + 1], 0.55f, col(m_cyan, 0.95f));
-        }
-        m_mainLayer->addChild(logo, 2);
-        // a moon going round the logo along its ring
-        auto* tilt = CCNode::create();
-        tilt->setPosition(lc);
-        tilt->setRotation(-0.38f * 180.f / 3.14159265f);
-        tilt->setScaleY(3.2f / 11.f);
-        m_mainLayer->addChild(tilt, 3);
-        auto* orbit = CCNode::create();
-        tilt->addChild(orbit);
-        auto* moon = CCDrawNode::create();
-        circle(moon, { 11.f, 0.f }, 1.7f, col({ 255, 255, 255 }, 1.f), 12);
-        orbit->addChild(moon);
-        orbit->runAction(CCRepeatForever::create(CCRotateBy::create(4.f, -360.f)));
-        label(m_mainLayer, "INPUT BUFFER", 0.56f, m_text, { 38.f, H - TITLE / 2.f }, { 0.f, 0.5f }, true);
-        label(m_mainLayer, Mod::get()->getVersion().toVString(), 0.4f, m_muted, { W - 38.f, H - TITLE / 2.f }, { 1.f, 0.5f });
+        // the status pill: is the buffer on, and how far
+        m_pill = CCDrawNode::create();
+        m_mainLayer->addChild(m_pill, 2);
+        m_pillLabel = label(m_mainLayer, "", 0.42f, m_text, { W - 86.f, cy }, { 0.5f, 0.5f });
 
         m_frameMenu = CCMenu::create();
         m_frameMenu->setPosition({ 0.f, 0.f });
         m_mainLayer->addChild(m_frameMenu, 5);
-        // close: a thin ring with an x
         auto* node = CCNode::create();
-        node->setContentSize({ 18.f, 18.f });
-        auto* d = CCDrawNode::create();
-        circle(d, { 9.f, 9.f }, 8.f, col({ 255, 255, 255 }, 0.06f), 28, 0.5f, col(m_t.main, 0.8f));
-        d->drawSegment({ 6.2f, 6.2f }, { 11.8f, 11.8f }, 0.6f, col(m_text, 0.95f));
-        d->drawSegment({ 6.2f, 11.8f }, { 11.8f, 6.2f }, 0.6f, col(m_text, 0.95f));
-        node->addChild(d);
+        node->setContentSize({ 20.f, 20.f });
+        auto* x = CCDrawNode::create();
+        roundRect(x, { 0.f, 0.f, 20.f, 20.f }, 6.f, white(0.05f), 0.5f, white(0.1f));
+        x->drawSegment({ 7.f, 7.f }, { 13.f, 13.f }, 0.6f, col(m_text, 0.9f));
+        x->drawSegment({ 7.f, 13.f }, { 13.f, 7.f }, 0.6f, col(m_text, 0.9f));
+        node->addChild(x);
         auto* close = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onCloseButton));
-        close->setPosition({ W - 18.f, H - TITLE / 2.f });
+        close->setPosition({ W - 22.f, cy });
         m_frameMenu->addChild(close);
+
+        // the session's saves, at the bottom of the sidebar
+        label(m_mainLayer, "THIS SESSION", 0.3f, m_dim, { 17.f, 34.f }, { 0.f, 0.5f });
+        m_saves = label(m_mainLayer, "", 0.46f, m_text, { 17.f, 21.f }, { 0.f, 0.5f });
+    }
+
+    void refreshHeader() {
+        if (!m_pill || !m_pillLabel) {
+            return;
+        }
+        std::string text = !buf.enabled ? "OFF" : buf.perMode ? "ON  |  per mode" : fmt::format("ON  |  {}", STAGE_CHIPS[buf.stage]);
+        if (buf.enabled && buf.train) {
+            text += "  |  training";
+        }
+        m_pillLabel->setString(text.c_str());
+        m_pillLabel->limitLabelWidth(120.f, 0.42f, 0.2f);
+        float w = m_pillLabel->getScaledContentSize().width + 22.f;
+        float right = W - 40.f, cy = H - HEADER / 2.f;
+        m_pillLabel->setPosition({ right - (w - 12.f) / 2.f, cy + 0.5f });
+        ccColor3B dot = buf.enabled ? m_good : m_bad;
+        m_pill->clear();
+        roundRect(m_pill, { right - w, cy - 9.f, w, 18.f }, 9.f, col(dot, 0.1f), 0.5f, col(dot, 0.45f));
+        circle(m_pill, { right - w + 8.f, cy }, 2.6f, col(dot, 1.f), 14);
+        if (m_saves) {
+            m_saves->setString(fmt::format("{} {}", sessionStats.saves, sessionStats.saves == 1 ? "save" : "saves").c_str());
+        }
     }
 
     void buildTabs() {
@@ -5208,132 +5193,159 @@ private:
         auto* menu = CCMenu::create();
         menu->setPosition({ 0.f, 0.f });
         m_tabsNode->addChild(menu);
+        float w = SIDE - 22.f, h = 24.f;
         for (int i = 0; i < static_cast<int>(std::size(TABS)); ++i) {
-            float y = H - TITLE - 22.f - i * 27.f;
             bool active = i == s_tab;
             auto* node = CCNode::create();
-            node->setContentSize({ SIDE - 16.f, 22.f });
+            node->setContentSize({ w, h });
             auto* d = CCDrawNode::create();
             if (active) {
-                roundRect(d, { 0.f, 0.f, SIDE - 16.f, 22.f }, 7.f, col(m_t.main, 0.32f), 0.6f, col(m_t.main, 0.9f));
-                d->drawSegment({ 3.f, 6.f }, { 3.f, 16.f }, 1.2f, col(m_cyan, 1.f));
+                roundRect(d, { 0.f, 0.f, w, h }, 6.f, col(m_t.main, 0.2f));
+                d->drawSegment({ 1.5f, 7.f }, { 1.5f, h - 7.f }, 1.1f, col(m_t.main, 1.f));
             }
-            circle(d, { 12.f, 11.f }, 2.2f, active ? col(m_cyan, 1.f) : col(m_muted, 0.6f), 12);
+            glyph(d, i, { 13.f, h / 2.f }, active ? col(m_t.soft, 1.f) : col(m_muted, 0.8f));
             node->addChild(d);
-            auto* l = CCLabelBMFont::create(TABS[i], headFont());
-            l->setScale(0.42f * HEAD_K);
+            auto* l = CCLabelBMFont::create(TABS[i], font());
+            l->setScale(0.48f);
             l->setColor(active ? m_text : m_muted);
             l->setAnchorPoint({ 0.f, 0.5f });
-            l->setPosition({ 22.f, 11.5f });
+            l->setPosition({ 25.f, h / 2.f + 0.5f });
             node->addChild(l);
             auto* item = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onTab));
-            item->m_scaleMultiplier = 1.04f;
+            item->m_scaleMultiplier = 1.03f;
             item->setTag(i);
-            item->setPosition({ SIDE / 2.f, y });
+            item->setPosition({ 8.f + (SIDE - 14.f) / 2.f, H - HEADER - 24.f - i * 28.f });
             menu->addChild(item);
         }
     }
 
     // ---------- pages ----------
 
-    float pageTop() {
-        return H - TITLE - 16.f;
+    void heading() {
+        label(m_page, TABS[s_tab], 0.64f, m_text, { L, H - HEADER - 19.f }, { 0.f, 0.5f });
+        label(m_page, TAB_INFO[s_tab], 0.38f, m_muted, { L, H - HEADER - 33.f }, { 0.f, 0.5f })->limitLabelWidth(CW, 0.38f, 0.2f);
     }
 
-    void heading(std::string const& title, std::string const& sub) {
-        label(m_page, title, 0.7f, m_text, { SIDE + 14.f, pageTop() }, { 0.f, 0.5f }, true);
-        if (!sub.empty()) {
-            label(m_page, sub, 0.42f, m_muted, { SIDE + 14.f, pageTop() - 14.f }, { 0.f, 0.5f })->limitLabelWidth(W - SIDE - 28.f, 0.42f, 0.2f);
-        }
-    }
-
-    // a translucent card behind a group of rows
-    void card(float top, float height) {
-        auto* d = CCDrawNode::create();
-        roundRect(d, { SIDE + 8.f, top - height, W - SIDE - 16.f, height }, 8.f, col({ 255, 255, 255 }, 0.045f), 0.5f, col(m_t.main, 0.35f));
-        m_page->addChild(d, 1);
+    void section(char const* text, float y) {
+        label(m_page, text, 0.3f, m_dim, { L, y }, { 0.f, 0.5f });
     }
 
     void pageBuffer() {
-        heading("Buffer", "How much an early click can be held back, and the physics speed.");
-        float cx = SIDE + (W - SIDE) / 2.f;
-        float y = pageTop() - 40.f;
-        card(y + 13.f, 52.f);
-        label(m_page, "Stage", 0.5f, m_muted, { SIDE + 20.f, y }, { 0.f, 0.5f });
-        button(m_pageMenu, "<", menu_selector(BufferMenu::onStage), { cx - 20.f, y }, 22.f, false, -1);
-        button(m_pageMenu, ">", menu_selector(BufferMenu::onStage), { W - 30.f, y }, 22.f, false, 1);
-        m_stage = label(m_page, "", 0.55f, m_text, { (cx - 8.f + W - 42.f) / 2.f, y });
+        heading();
+        float y = H - HEADER - 54.f;
+        section("STAGE", y);
+        y -= 16.f;
+        // a chip for each stage; the lit one is the stage you're on
+        float cw = (CW - 3.f * (STAGE_COUNT - 1)) / STAGE_COUNT;
+        for (int i = 0; i < STAGE_COUNT; ++i) {
+            bool active = !buf.perMode && buf.stage == i;
+            auto* node = CCNode::create();
+            node->setContentSize({ cw, 20.f });
+            auto* d = CCDrawNode::create();
+            if (active) {
+                roundRect(d, { 0.f, 0.f, cw, 20.f }, 6.f, col(m_t.main, 1.f));
+            }
+            else {
+                roundRect(d, { 0.f, 0.f, cw, 20.f }, 6.f, white(0.05f), 0.5f, white(0.08f));
+            }
+            node->addChild(d);
+            auto* l = CCLabelBMFont::create(STAGE_CHIPS[i], font());
+            l->setColor(active ? ccColor3B { 255, 255, 255 } : i == STAGE_COUNT - 1 ? m_muted : m_text);
+            l->setPosition({ cw / 2.f, 10.5f });
+            l->limitLabelWidth(cw - 5.f, 0.44f, 0.2f);
+            node->addChild(l);
+            auto* item = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onStagePick));
+            item->m_scaleMultiplier = 1.06f;
+            item->setTag(i);
+            item->setPosition({ L + cw / 2.f + i * (cw + 3.f), y });
+            m_pageMenu->addChild(item);
+        }
+        y -= 18.f;
+        m_stage = label(m_page, "", 0.38f, m_muted, { L, y }, { 0.f, 0.5f });
+
+        y -= 22.f;
+        section("PRESETS", y);
         y -= 22.f;
         char const* presets[] = { "Safe", "Balanced", "Aggressive" };
-        float pw = (W - SIDE - 40.f) / 3.f;
+        char const* about[] = { "2 frames, extra margin", "4 frames, more time at deaths", "8 frames, max reach" };
+        float pw = (CW - 12.f) / 3.f;
         for (int i = 0; i < 3; ++i) {
-            button(m_pageMenu, presets[i], menu_selector(BufferMenu::onPreset), { SIDE + 20.f + pw / 2.f + i * (pw + 4.f), y }, pw, false, i);
+            auto* node = CCNode::create();
+            node->setContentSize({ pw, 30.f });
+            auto* d = CCDrawNode::create();
+            roundRect(d, { 0.f, 0.f, pw, 30.f }, 6.f, white(0.035f), 0.5f, white(0.07f));
+            d->drawSegment({ 8.f, 9.f }, { 8.f, 21.f }, 0.9f, col(m_t.main, 0.35f + 0.3f * i));
+            node->addChild(d);
+            auto* t = CCLabelBMFont::create(presets[i], font());
+            t->setScale(0.48f);
+            t->setColor(m_text);
+            t->setAnchorPoint({ 0.f, 0.5f });
+            t->setPosition({ 14.f, 20.f });
+            node->addChild(t);
+            auto* s = CCLabelBMFont::create(about[i], font());
+            s->setColor(m_muted);
+            s->setAnchorPoint({ 0.f, 0.5f });
+            s->setPosition({ 14.f, 9.f });
+            s->limitLabelWidth(pw - 18.f, 0.32f, 0.15f);
+            node->addChild(s);
+            auto* item = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onPreset));
+            item->m_scaleMultiplier = 1.04f;
+            item->setTag(i);
+            item->setPosition({ L + pw / 2.f + i * (pw + 6.f), y });
+            m_pageMenu->addChild(item);
         }
+
+        y -= 40.f;
+        card({ L, y - TILE_H / 2.f, CW, TILE_H });
+        label(m_page, "Physics TPS", 0.46f, m_text, { L + 9.f, y + 0.5f }, { 0.f, 0.5f });
+        button(m_pageMenu, "-", menu_selector(BufferMenu::onTps), { R - 70.f, y }, 18.f, false, -1, 18.f);
+        button(m_pageMenu, "+", menu_selector(BufferMenu::onTps), { R - 14.f, y }, 18.f, false, 1, 18.f);
+        m_tpsLabel = label(m_page, "", 0.46f, m_t.soft, { R - 42.f, y + 0.5f });
+
+        m_status = label(m_page, "", 0.34f, m_dim, { L, 30.f }, { 0.f, 0.5f });
+        button(m_pageMenu, "Run check", menu_selector(BufferMenu::onRunCheck), { R - 42.f, 30.f }, 84.f, true);
+    }
+
+    void pageOptions(Option const* options, size_t count) {
+        heading();
+        optionGrid(options, count, H - HEADER - 60.f);
+    }
+
+    void pageFrames() {
+        heading();
+        float y = H - HEADER - 60.f;
+        m_perModeTile = tileItem("Use per-mode frames", { L + CW / 2.f, y }, CW, menu_selector(BufferMenu::onPerMode), 0);
         y -= 32.f;
-        card(y + 11.f, 24.f);
-        label(m_page, "Physics TPS", 0.5f, m_muted, { SIDE + 20.f, y }, { 0.f, 0.5f });
-        button(m_pageMenu, "-", menu_selector(BufferMenu::onTps), { W - 92.f, y }, 22.f, false, -1);
-        button(m_pageMenu, "+", menu_selector(BufferMenu::onTps), { W - 30.f, y }, 22.f, false, 1);
-        m_tpsLabel = label(m_page, "", 0.55f, m_text, { W - 61.f, y });
-        y -= 30.f;
-        m_status = label(m_page, "", 0.45f, m_cyan, { SIDE + 14.f, y }, { 0.f, 0.5f });
-        if (buf.perMode) {
-            label(m_page, "Per-mode frames are on (Custom tab). Stage and presets turn them off.", 0.4f, m_t.soft, { SIDE + 14.f, y - 14.f },
-                { 0.f, 0.5f })->limitLabelWidth(W - SIDE - 28.f, 0.4f, 0.2f);
-        }
-        button(m_pageMenu, "Run check", menu_selector(BufferMenu::onRunCheck), { cx, 26.f }, 90.f, true);
-    }
-
-    void pageOptions(char const* title, char const* sub, Option const* options, size_t count) {
-        heading(title, sub);
-        float top = pageTop() - 40.f;
-        card(top + 12.f, ((count + 1) / 2) * ROW + 4.f);
-        optionGrid(options, count, top);
-    }
-
-    void pageCustom() {
-        heading("Custom", "Pick how many frames each game mode can be held back. 0 = no buffer.");
-        float y = pageTop() - 38.f;
-        card(y + 11.f, 24.f);
-        label(m_page, "Use per-mode frames", 0.52f, buf.perMode ? m_text : m_muted, { SIDE + 20.f, y }, { 0.f, 0.5f });
-        switchItem({ W - 30.f, y }, buf.perMode, menu_selector(BufferMenu::onPerMode), 0, &m_perModeSwitch);
-        y -= 30.f;
-        float colW = (W - SIDE - 34.f) / 2.f;
-        card(y + 12.f, 4 * 24.f + 2.f);
+        float w = (CW - 8.f) / 2.f;
+        auto* bg = CCDrawNode::create();
+        m_page->addChild(bg, 1);
         for (int i = 0; i < 8; ++i) {
-            float x = SIDE + 18.f + (i / 4) * (colW + 10.f);
-            float ry = y - (i % 4) * 24.f;
-            auto* icon = modeIcon(i);  // v2.89: your own icon for each mode instead of its name
-            icon->setPosition({ x + 12.f, ry });
+            float x = L + (i / 4) * (w + 8.f);
+            float ry = y - (i % 4) * PITCH;
+            roundRect(bg, { x, ry - TILE_H / 2.f, w, TILE_H }, 6.f, white(0.035f), 0.5f, white(0.07f));
+            auto* icon = modeIcon(i);  // your own icon for each mode
+            icon->setPosition({ x + 13.f, ry });
             m_page->addChild(icon, 3);
-            // v2.90: a slider instead of - / + (drag it; half-frame steps)
             auto* track = CCDrawNode::create();
             m_page->addChild(track, 2);
-            m_sliders.push_back({ i, x + 30.f, x + colW - 36.f, ry, track });
-            m_modeValues[i] = label(m_page, "", 0.52f, m_cyan, { x + colW - 15.f, ry });
+            m_sliders.push_back({ i, x + 30.f, x + w - 36.f, ry, track });
+            m_modeValues[i] = label(m_page, "", 0.42f, m_t.soft, { x + w - 17.f, ry + 0.5f });
         }
-        label(m_page, "Drag a slider: half-frame steps, up to 10 frames. With this on, low latency's 1-frame limit doesn't apply.", 0.38f, m_muted,
-            { SIDE + 14.f, 22.f }, { 0.f, 0.5f })->limitLabelWidth(W - SIDE - 28.f, 0.38f, 0.2f);
+        label(m_page, "Drag a slider: half-frame steps, up to 10 frames. Low latency's 1-frame limit doesn't apply here.", 0.32f, m_dim,
+            { L, 30.f }, { 0.f, 0.5f })->limitLabelWidth(CW, 0.32f, 0.15f);
         refreshModes();
     }
 
     void pageTools() {
-        heading("Tools", "What you see while playing, plus stats and the log.");
-        float top = pageTop() - 40.f;
-        float rows = static_cast<float>((std::size(TOOLS) + 1) / 2);
-        card(top + 12.f, rows * ROW + 4.f);
-        optionGrid(TOOLS, std::size(TOOLS), top);
-        float y = top - rows * ROW - 14.f;
-        float bw = (W - SIDE - 46.f) / 3.f;
-        float x0 = SIDE + 20.f + bw / 2.f;
-        button(m_pageMenu, "Stats", menu_selector(BufferMenu::onStats), { x0, y }, bw);
-        button(m_pageMenu, "Console", menu_selector(BufferMenu::onConsole), { x0 + bw + 6.f, y }, bw);  // phones have no F9
-        button(m_pageMenu, "Copy log", menu_selector(BufferMenu::onCopyLog), { x0 + 2.f * (bw + 6.f), y }, bw);
-        y -= 24.f;
-        float bw2 = (W - SIDE - 40.f) / 2.f;
-        float x2 = SIDE + 20.f + bw2 / 2.f;
-        button(m_pageMenu, "Forget this level", menu_selector(BufferMenu::onForget), { x2, y }, bw2);
-        button(m_pageMenu, "All settings", menu_selector(BufferMenu::onAllSettings), { x2 + bw2 + 6.f, y }, bw2);
+        heading();
+        optionGrid(TOOLS, std::size(TOOLS), H - HEADER - 60.f);
+        char const* names[] = { "Stats", "Console", "Copy log", "Forget level", "Settings" };
+        SEL_MenuHandler handlers[] = { menu_selector(BufferMenu::onStats), menu_selector(BufferMenu::onConsole),  // phones have no F9
+            menu_selector(BufferMenu::onCopyLog), menu_selector(BufferMenu::onForget), menu_selector(BufferMenu::onAllSettings) };
+        float bw = (CW - 4.f * 5.f) / 5.f;
+        for (int i = 0; i < 5; ++i) {
+            button(m_pageMenu, names[i], handlers[i], { L + bw / 2.f + i * (bw + 5.f), 30.f }, bw);
+        }
     }
 
     void rebuildPage() {
@@ -5341,27 +5353,24 @@ private:
             m_page->removeFromParent();
         }
         m_stage = m_status = m_tpsLabel = nullptr;
-        m_perModeSwitch = nullptr;
+        m_perModeTile = { nullptr, nullptr, {} };
         m_modeValues.fill(nullptr);
         m_sliders.clear();
         m_dragSlider = -1;
         m_options.clear();
-        m_switches.clear();
-        m_switchLabels.clear();
+        m_tiles.clear();
         m_page = CCNode::create();
-        m_page->setPosition({ 14.f, 0.f });
-        m_page->runAction(CCEaseExponentialOut::create(CCMoveTo::create(0.35f, { 0.f, 0.f })));
+        m_page->setPosition({ 0.f, -8.f });
+        m_page->runAction(CCEaseExponentialOut::create(CCMoveTo::create(0.3f, { 0.f, 0.f })));
         m_mainLayer->addChild(m_page, 3);
         m_pageMenu = CCMenu::create();
         m_pageMenu->setPosition({ 0.f, 0.f });
         m_page->addChild(m_pageMenu, 5);
 
         switch (s_tab) {
-            case 1:
-                pageOptions("Prediction", "What the hidden ghost predicts before your click is let through.", PREDICTION, std::size(PREDICTION));
-                break;
-            case 2: pageOptions("Modes", "Per game mode helpers and latency.", MODES, std::size(MODES)); break;
-            case 3: pageCustom(); break;
+            case 1: pageOptions(PREDICTION, std::size(PREDICTION)); break;
+            case 2: pageOptions(MODES, std::size(MODES)); break;
+            case 3: pageFrames(); break;
             case 4: pageTools(); break;
             default: pageBuffer(); break;
         }
@@ -5372,23 +5381,24 @@ private:
 
     void refresh() {
         if (m_stage) {
-            m_stage->setString(stageText().c_str());
-            m_stage->limitLabelWidth(W - SIDE - 150.f, 0.55f, 0.2f);
+            m_stage->setString(buf.perMode ? "Per-mode frames are on (Frames tab). Picking a stage turns them off."
+                                           : stageText().c_str());
+            m_stage->limitLabelWidth(CW, 0.38f, 0.2f);
         }
         if (m_tpsLabel) {
             m_tpsLabel->setString(fmt::format("{}", Mod::get()->getSettingValue<int64_t>("tps")).c_str());
         }
         if (m_status) {
             float dt = buf.tickLength > 0.001f ? buf.tickLength : TICK;
-            m_status->setString(fmt::format("physics {:.0f}/s   |   CBF {}   |   memory {} spots", 60.f / dt,
+            m_status->setString(fmt::format("Physics {:.0f}/s   |   CBF {}   |   Memory {} spots", 60.f / dt,
                 Loader::get()->isModLoaded("syzzi.click_between_frames") ? "on" : "off", memorySpots()).c_str());
+            m_status->limitLabelWidth(CW - 96.f, 0.34f, 0.15f);
         }
-        for (size_t i = 0; i < m_switches.size(); ++i) {
-            bool on = optionValue(*m_options[i]);
-            drawSwitch(m_switches[i], on);
-            m_switchLabels[i]->setColor(on ? m_text : m_muted);
+        for (size_t i = 0; i < m_tiles.size(); ++i) {
+            drawTile(m_tiles[i], optionValue(*m_options[i]));
         }
         refreshModes();
+        refreshHeader();
     }
 
     void drawSlider(ModeSlider const& sl) {
@@ -5396,12 +5406,11 @@ private:
         d->clear();
         float t = static_cast<float>(buf.modeTicks[sl.mode]) / MODE_TICKS_MAX;
         float kx = sl.x0 + (sl.x1 - sl.x0) * t;
-        roundRect(d, { sl.x0, sl.y - 2.f, sl.x1 - sl.x0, 4.f }, 2.f, col({ 255, 255, 255 }, 0.12f));
+        roundRect(d, { sl.x0, sl.y - 1.5f, sl.x1 - sl.x0, 3.f }, 1.5f, white(0.1f));
         if (kx - sl.x0 > 1.f) {
-            roundRect(d, { sl.x0, sl.y - 2.f, kx - sl.x0, 4.f }, 2.f, col(buf.perMode ? m_t.main : m_muted, buf.perMode ? 1.f : 0.6f));
+            roundRect(d, { sl.x0, sl.y - 1.5f, kx - sl.x0, 3.f }, 1.5f, buf.perMode ? col(m_t.main, 1.f) : col(m_muted, 0.5f));
         }
-        circle(d, { kx, sl.y }, 7.5f, col(buf.perMode ? m_cyan : m_muted, 0.16f), 24);
-        circle(d, { kx, sl.y }, 5.f, col({ 255, 255, 255 }, buf.perMode ? 1.f : 0.75f), 24);
+        circle(d, { kx, sl.y }, 5.f, white(buf.perMode ? 1.f : 0.7f), 24, 0.6f, buf.perMode ? col(m_t.main, 1.f) : col(m_muted, 0.6f));
     }
 
     // a touch on a slider sets its mode's frames (snapped to half frames)
@@ -5421,45 +5430,31 @@ private:
         for (int i = 0; i < 8; ++i) {
             if (m_modeValues[i]) {
                 m_modeValues[i]->setString(fmt::format("{:g}f", buf.modeTicks[i] * TICK).c_str());
-                m_modeValues[i]->setColor(buf.perMode ? m_cyan : m_muted);
+                m_modeValues[i]->setColor(buf.perMode ? m_t.soft : m_dim);
             }
         }
-        if (m_perModeSwitch) {
-            drawSwitch(m_perModeSwitch, buf.perMode);
+        if (m_perModeTile.draw) {
+            drawTile(m_perModeTile, buf.perMode);
         }
     }
 
-    // ---------- motion: shooting stars ----------
-
-    CCNode* m_sky = nullptr;
-
+    // keeps the header right if the stage changes with a key while the menu is open
     void update(float dt) override {
-        m_shootTimer -= dt;
-        if (m_shootTimer <= 0.f && m_sky) {
-            m_shootTimer = 3.5f + static_cast<float>(std::rand() % 400) / 100.f;
-            auto* streak = CCLayerGradient::create({ 255, 255, 255, 0 }, { 255, 255, 255, 220 }, { 1.f, 0.f });
-            streak->setContentSize({ 34.f, 1.2f });
-            streak->ignoreAnchorPointForPosition(false);
-            streak->setAnchorPoint({ 1.f, 0.5f });
-            float sx = 60.f + static_cast<float>(std::rand() % static_cast<int>(W - 60.f));
-            streak->setPosition({ sx, H + 10.f });
-            streak->setRotation(28.f);
-            m_sky->addChild(streak);
-            streak->runAction(CCSequence::create(
-                CCSpawn::create(CCMoveBy::create(0.9f, { -170.f, -90.f }), CCSequence::create(CCDelayTime::create(0.5f), CCFadeOut::create(0.4f), nullptr),
-                    nullptr),
-                CCRemoveSelf::create(), nullptr));
+        m_liveTimer -= dt;
+        if (m_liveTimer <= 0.f) {
+            m_liveTimer = 0.5f;
+            refreshHeader();
         }
     }
 
-    // ---------- dragging by the title bar ----------
+    // ---------- sliders, and dragging by the header ----------
 
     bool ccTouchBegan(CCTouch* touch, CCEvent* event) override {
         if (m_page) {
             auto pp = m_page->convertToNodeSpace(touch->getLocation());
             for (size_t i = 0; i < m_sliders.size(); ++i) {
                 auto const& sl = m_sliders[i];
-                if (pp.x >= sl.x0 - 9.f && pp.x <= sl.x1 + 9.f && std::abs(pp.y - sl.y) <= 10.f) {
+                if (pp.x >= sl.x0 - 8.f && pp.x <= sl.x1 + 8.f && std::abs(pp.y - sl.y) <= 11.f) {
                     m_dragSlider = static_cast<int>(i);
                     slideTo(sl, pp);
                     return true;
@@ -5467,7 +5462,7 @@ private:
             }
         }
         auto p = m_mainLayer->convertToNodeSpace(touch->getLocation());
-        if (p.x >= 0.f && p.x <= W - 34.f && p.y >= H - TITLE && p.y <= H) {
+        if (p.x >= 0.f && p.x <= W - 36.f && p.y >= H - HEADER && p.y <= H) {
             m_dragging = true;
             return true;
         }
@@ -5511,6 +5506,9 @@ private:
     }
 
     void onTab(CCObject* sender) {
+        if (sender->getTag() == s_tab) {
+            return;
+        }
         s_tab = sender->getTag();
         rebuildPage();
     }
@@ -5544,9 +5542,10 @@ private:
         }
     }
 
-    void onStage(CCObject* sender) {
+    // a stage chip: go straight to that stage
+    void onStagePick(CCObject* sender) {
         perModeOff();
-        cycleStage(sender->getTag());
+        cycleStage(sender->getTag() - buf.stage);
         rebuildPage();
     }
 
@@ -5563,16 +5562,7 @@ private:
         refreshWatermark();
         refreshPanel();
         say("per-mode frames {}", buf.perMode ? "on" : "off");
-        rebuildPage();
-    }
-
-    void onModeStep(CCObject* sender) {
-        int mode = sender->getTag() / 2;
-        int step = sender->getTag() % 2 ? 2 : -2;  // half a frame
-        buf.modeTicks[mode] = std::clamp(buf.modeTicks[mode] + step, 0, MODE_TICKS_MAX);
-        saveModeTicks();
-        say("{}: {:g} frames", MODE_NAMES[mode], buf.modeTicks[mode] * TICK);
-        refreshModes();
+        refresh();
     }
 
     void onAllSettings(CCObject*) {
@@ -5589,7 +5579,7 @@ private:
         say("console {}", buf.panelOpen ? "shown" : "hidden");
     }
 
-    // v2.75 presets: stage + the switches that matter most, in one click
+    // presets: stage + the switches that matter most, in one tap
     void onPreset(CCObject* sender) {
         auto* mod = Mod::get();
         int which = sender->getTag();
@@ -5643,7 +5633,7 @@ protected:
             m_closeBtn->setVisible(false);
             m_closeBtn->setEnabled(false);
         }
-        this->setOpacity(90);
+        this->setOpacity(120);
         if (s_moved) {
             m_mainLayer->setPosition(s_pos);
         }
@@ -5703,9 +5693,9 @@ class $modify(BufEndLevelLayer, EndLevelLayer) {
 class $modify(BufPauseLayer, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
-        auto* top = CCSprite::create("heart.png"_spr);
+        auto* top = CCSprite::create("mouse.png"_spr);
         top->setScale(0.55f);
-        auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::DarkPurple, CircleBaseSize::Medium);
+        auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::Blue, CircleBaseSize::Medium);
         auto* button = CCMenuItemSpriteExtra::create(sprite, this, menu_selector(BufPauseLayer::onBufferMenu));
         button->setID("click-before-frames-button"_spr);
         auto* menu = CCMenu::create();
@@ -5722,7 +5712,60 @@ class $modify(BufPauseLayer, PauseLayer) {
     }
 };
 
+// v3.0: the mod's id changed (basu.input-buffer -> timbodev.input-buffer), and Geode keeps each
+// mod's data in a folder named after its id. Once, bring the old folder's settings, saved values
+// (stage, per-mode frames, ...) and files (level memory, run checks) over to the new one.
+static void migrateOldSave() {
+    auto* mod = Mod::get();
+    if (mod->getSavedValue<bool>("migrated-v3", false)) {
+        return;
+    }
+    mod->setSavedValue("migrated-v3", true);
+    auto oldDir = dirs::getModsSaveDir() / "basu.input-buffer";
+    std::error_code ec;
+    if (!std::filesystem::is_directory(oldDir, ec)) {
+        return;
+    }
+    if (auto json = file::readJson(oldDir / "settings.json"); json.isOk() && json.unwrap().isObject()) {
+        for (auto const& [key, value] : json.unwrap()) {
+            if (auto setting = mod->getSetting(key)) {
+                setting->load(value);
+            }
+        }
+    }
+    if (auto json = file::readJson(oldDir / "saved.json"); json.isOk() && json.unwrap().isObject()) {
+        auto& saved = mod->getSaveContainer();
+        for (auto const& [key, value] : json.unwrap()) {
+            if (!saved.contains(key)) {
+                saved[key] = value;
+            }
+        }
+    }
+    auto newDir = mod->getSaveDir();
+    int copied = 0;
+    for (auto it = std::filesystem::recursive_directory_iterator(oldDir, ec); !ec && it != std::filesystem::recursive_directory_iterator();
+        it.increment(ec)) {
+        if (!it->is_regular_file(ec)) {
+            continue;
+        }
+        auto name = it->path().filename();
+        if (name == "settings.json" || name == "saved.json") {
+            continue;
+        }
+        auto target = newDir / std::filesystem::relative(it->path(), oldDir, ec);
+        if (ec || std::filesystem::exists(target, ec)) {
+            continue;
+        }
+        std::filesystem::create_directories(target.parent_path(), ec);
+        if (std::filesystem::copy_file(it->path(), target, ec)) {
+            ++copied;
+        }
+    }
+    log::info("moved the old basu.input-buffer data over ({} files)", copied);
+}
+
 $on_mod(Loaded) {
+    migrateOldSave();
     buf.console = Mod::get()->getSettingValue<bool>("debug-console");
     buf.showPath = Mod::get()->getSettingValue<bool>("show-path");
     recoverGlobals();
@@ -5754,7 +5797,8 @@ $on_mod(Loaded) {
     if (Loader::get()->isModLoaded("square3ang.cbfextrapolate")) {
         say("CBF Extrapolate detected: visual only, predictions unaffected");
     }
-    say("v2.101.0 loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
+    say("Input Buffer {} loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off",
+        Mod::get()->getVersion().toVString());
 }
 
 class $modify(BufPlayLayer, PlayLayer) {
@@ -6459,16 +6503,16 @@ $on_mod(Loaded) {
     }).leak();
 }
 
-// the main menu: a heart button that opens the menu (with the other buttons at the bottom)
+// the main menu: a mouse button that opens the menu (with the other buttons at the bottom)
 class $modify(BufMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) {
             return false;
         }
-        auto* top = CCSprite::create("heart.png"_spr);
+        auto* top = CCSprite::create("mouse.png"_spr);
         top->setScale(0.55f);
         top->setColor({ 255, 255, 255 });
-        auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::DarkPurple, CircleBaseSize::Medium);
+        auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::Blue, CircleBaseSize::Medium);
         auto* item = CCMenuItemSpriteExtra::create(sprite, this, menu_selector(BufMenuLayer::onBufferMenu));
         item->setID("click-before-frames-button"_spr);
         item->setVisible(!Mod::get()->getSettingValue<bool>("hide-menu-buttons"));

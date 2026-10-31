@@ -5,8 +5,8 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v2.101.0",
-	"id": "basu.input-buffer",
+	"version": "v3.0.0",
+	"id": "timbodev.input-buffer",
 	"name": "Input Buffer",
 	"developer": "timbodev",
 	"description": "Trajectory-based input buffer: delays early clicks/releases by up to 8+ frames, with orb, pad and portal-aware prediction. github.com/raresdalas1009/-predictive-input-buffer",
@@ -401,12 +401,12 @@
 		"menu-theme": {
 			"type": "string",
 			"name": "Menu theme",
-			"description": "Colours of the in-game menu.",
-			"default": "Purple",
+			"description": "Accent colour of the in-game menu.",
+			"default": "Blue",
 			"one-of": [
+				"Blue",
 				"Purple",
 				"Pink",
-				"Blue",
 				"Green",
 				"Dark"
 			]
@@ -487,10 +487,6 @@
 			"resources/*.png"
 		],
 		"fonts": {
-			"orbitron": {
-				"path": "resources/fonts/Orbitron.ttf",
-				"size": 64
-			},
 			"exo2": {
 				"path": "resources/fonts/Exo2.ttf",
 				"size": 64

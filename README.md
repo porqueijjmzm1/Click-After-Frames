@@ -1,7 +1,9 @@
-# Click Before Frames (Geode)
+# Input Buffer (Geode)
+
+By timbodev, based on Click Before Frames by BASU.
 
 ## Keys
-6 cycle stage | 7 menu | F8 copy the console log | F9 open/close the in-game console | F10 path view | F11 forget this level's memory
+6 cycle stage | 7 or Right Shift menu | F8 copy the console log | F9 open/close the in-game console | F10 path view | F11 forget this level's memory
 
 Practice use only; do not use for verified or leaderboard runs.
 
@@ -86,3 +88,4 @@ Practice use only; do not use for verified or leaderboard runs.
 - v2.99: "Remove watermark" setting (off by default, also a switch in the menu's Tools tab) hides the "CBF | stage" label in levels.
 - v2.100: "Hide menu buttons" setting (off by default, also a switch in the Tools tab) hides the heart buttons on the main menu and pause menu; Right Shift opens / closes the menu in a level and on the main menu.
 - v2.101: renamed to "Input Buffer" (developer timbodev); "Flash when save" setting (off by default, also a switch in the Tools tab) flashes the screen green on every save.
+- v3.0: new id timbodev.input-buffer (settings, saved values and level memory are moved over from basu.input-buffer once); new menu: clean dark window, header with a mouse icon and a live ON/OFF status pill, sidebar tabs with icons, tap-anywhere switch tiles, stage chips (pick any stage in one tap), preset cards, Frames tab with per-mode sliders, session saves counter; blue accent by default (Menu theme: Blue, Purple, Pink, Green, Dark); mouse button instead of the heart on the main and pause menus.

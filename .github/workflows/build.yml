@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, ccr-b5c0153f-magtn3]
+    tags: ['v*']
 jobs:
   build:
     strategy:
@@ -42,16 +43,22 @@ jobs:
         with:
           name: Build Output
           path: ${{ steps.build.outputs.build-output }}
-      # the combined .geode, unzipped, as TESTEBUFFER.geode on the "teste" release
-      # (replaced on every build)
-      - name: Publish TESTEBUFFER.geode
+      # a version tag (v3.0.0, ...) publishes a real release with InputBuffer.geode; any other
+      # push replaces TESTEBUFFER.geode on the "teste" pre-release
+      - name: Publish the .geode
         env:
           GH_TOKEN: ${{ github.token }}
           OUT: ${{ steps.build.outputs.build-output }}
         run: |
           file=$(find "$OUT" -name '*.geode' | head -n 1)
           test -n "$file"
-          cp "$file" TESTEBUFFER.geode
-          gh release delete teste --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
-          gh release create teste TESTEBUFFER.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --prerelease --title "TESTEBUFFER" --notes "Build de teste do commit $GITHUB_SHA"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            cp "$file" InputBuffer.geode
+            gh release create "$GITHUB_REF_NAME" InputBuffer.geode --repo "$GITHUB_REPOSITORY" \
+              --title "Input Buffer $GITHUB_REF_NAME" --notes-from-tag --latest
+          else
+            cp "$file" TESTEBUFFER.geode
+            gh release delete teste --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+            gh release create teste TESTEBUFFER.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --prerelease --latest=false --title "TESTEBUFFER" --notes "Build de teste do commit $GITHUB_SHA"
+          fi
