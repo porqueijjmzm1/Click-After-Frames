@@ -437,6 +437,29 @@ namespace {
         buf.panelDirty = buf.panelOpen;
     }
 
+    // v3.2: settings and saved values (stage, per-mode frames, ...) go to disk at safe moments:
+    // game start, entering and leaving a level, pausing, back on the main menu, closing the
+    // menu, and right after a settings change. Geode only wrote them when the game closed
+    // normally, so a crash or a phone closing the app lost every change. Geode only writes
+    // what changed, so a save with nothing new costs nothing.
+    bool saveQueued = false;
+
+    void saveNow() {
+        saveQueued = false;
+        if (auto res = Mod::get()->saveData(); res.isErr()) {
+            log::warn("couldn't save the settings: {}", res.unwrapErr());
+        }
+    }
+
+    // a save on the next frame, so changes made together are written once
+    void queueSave() {
+        if (saveQueued) {
+            return;
+        }
+        saveQueued = true;
+        queueInMainThread([] { saveNow(); });
+    }
+
     bool isGhost(PlayerObject* p) {
         return p && (p == buf.ghost1 || p == buf.ghost2);
     }
@@ -4623,6 +4646,7 @@ namespace {
         readSettings();
         saveProfile();
         Mod::get()->setSavedValue("stage", buf.stage);  // v2.58: one stage for every level, kept on restart
+        queueSave();
         say("Stage (6) -> {}", stageText());
         refreshAutoTag();
         refreshWatermark();
@@ -5767,6 +5791,7 @@ public:
         if (s_open == this) {
             s_open = nullptr;
         }
+        queueSave();  // whatever you changed in the menu
     }
 
     static BufferMenu* create() {
@@ -5811,6 +5836,7 @@ class $modify(BufEndLevelLayer, EndLevelLayer) {
 class $modify(BufPauseLayer, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
+        saveNow();  // v3.2: pausing
         auto* top = CCSprite::create("mouse.png"_spr);
         top->setScale(0.55f);
         auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::Blue, CircleBaseSize::Medium);
@@ -5917,6 +5943,7 @@ $on_mod(Loaded) {
     }
     say("Input Buffer {} loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off",
         Mod::get()->getVersion().toVString());
+    saveNow();  // v3.2: the game's start (keeps the moved-over v3.0 data and the switched-once settings)
 }
 
 class $modify(BufPlayLayer, PlayLayer) {
@@ -6141,6 +6168,7 @@ class $modify(BufPlayLayer, PlayLayer) {
         buf.rapid = 0;
         forgetPress();
         buf.owner = this;
+        saveNow();  // v3.2: entering a level
         return true;
     }
 
@@ -6150,6 +6178,7 @@ class $modify(BufPlayLayer, PlayLayer) {
         benchRecording = false;
         saveMemory();
         restoreGlobals();
+        saveNow();  // v3.2: leaving a level
         buf.hintLabel = nullptr;
         buf.heatNode = nullptr;
         memoryKey.clear();
@@ -6728,6 +6757,8 @@ $on_mod(Loaded) {
     // the settings popup can change it mid-level
     listenForSettingChanges<bool>("remove-watermark", [](bool) { refreshWatermark(); });
     listenForSettingChanges<bool>("hide-menu-buttons", [](bool) { refreshMenuButtons(); });
+    // v3.2: any settings change (the menu, the settings popup) is saved on the next frame
+    listenForAllSettingChanges([](std::string_view, std::shared_ptr<SettingV3>) { queueSave(); });
     KeyboardInputEvent().listen([](KeyboardInputData& data) {
         if (data.key == KEY_RightShift && data.action == KeyboardInputData::Action::Press) {
             onRightShift();
@@ -6754,6 +6785,7 @@ class $modify(BufMenuLayer, MenuLayer) {
             bottom->addChild(item);
             bottom->updateLayout();
         }
+        saveNow();  // v3.2: back on the main menu (and the game's start)
         checkForUpdate();
         if (!updateInstalled.empty()) {
             queueInMainThread([] { showUpdatePopup(); });
