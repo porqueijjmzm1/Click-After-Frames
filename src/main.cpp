@@ -5094,8 +5094,8 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
         };
         for (int i = 0; i < pieces; ++i) {
             float a = a0 + (a1 - a0) * i / pieces, b = a0 + (a1 - a0) * (i + 1) / pieces;
-            if (auto c = color(on((a + b) / 2.f, thick / 2.f))) {
-                fillAnyWay(d, { on(a, 0.f), on(b, 0.f), on(b, thick), on(a, thick) }, clip, col(*c, 1.f));
+            if (auto fill = color(on((a + b) / 2.f, thick / 2.f))) {
+                fillAnyWay(d, { on(a, 0.f), on(b, 0.f), on(b, thick), on(a, thick) }, clip, col(*fill, 1.f));
             }
         }
     };
