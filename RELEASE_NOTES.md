@@ -1,10 +1,17 @@
-## What's new in v3.3.1
+## What's new in v3.4.0
 
-- A small release to show off the new **update window**: you're seeing it right now. Pick **Download** to get this version (with a progress bar, then **Restart now**), **Later** to be asked again next time you open the game, or **Skip version** to not see this one again.
-- Everything from v3.3.0 is included: **Tools > Updates** checks by hand, and nothing is downloaded without asking.
+- **Input Buffer is now Kosmos**, with a white **Saturn** logo and a Saturn button on the main and pause menus. Your settings and updates carry over.
+- **New themes**: each one changes the whole window, not just a colour. A gradient, art drawn behind the menu, two accent colours and tinted text.
+  - **Deep space**: Kosmos (starfield), Nebula (clouds), Void (minimal orbit)
+  - **Planets**: Saturn (ringed planet), Mars (dust storm), Neptune (rising planet)
+  - **Phenomena**: Aurora (light curtains), Supernova (burst of rays), Comet (long tails)
+- The **Themes tab** is sorted into these groups, and every card shows a small preview of the window in that theme.
+- The update window follows your theme too.
+
+The old themes (Blue, Purple, ...) are gone; if you had one picked, the menu starts in Kosmos.
 
 ## Install
 
-Put InputBuffer.geode in your Geode mods folder and remove older copies (TESTEBUFFER.geode or basu.input-buffer.geode), or both run at once.
+Put Kosmos.geode in your Geode mods folder and remove older copies (InputBuffer.geode, TESTEBUFFER.geode or basu.input-buffer.geode), or both run at once.
 
 Based on Click Before Frames by BASU.

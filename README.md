@@ -1,4 +1,4 @@
-# Input Buffer (Geode)
+# Kosmos (Geode)
 
 By timbodev, based on Click Before Frames by BASU.
 
@@ -94,3 +94,4 @@ Practice use only; do not use for verified or leaderboard runs.
 - v3.2: settings and saved values are written to disk at safe moments (game start, entering / leaving a level, pausing, main menu, closing the menu, right after a settings change) instead of only when the game closes normally; a crash or a phone closing the app no longer loses them.
 - v3.3: update window in the menu's style: when a newer release is out the main menu shows what's new (the release notes, in a scrolling box) and you choose Download (with a progress bar, then Restart now), Later or Skip version; Tools > Updates checks by hand; the setting is now "Check for updates" (nothing is downloaded without asking); release notes are in English.
 - v3.3.1: small release to show the update window.
+- v3.4.0: renamed to "Kosmos" (the mod id stays timbodev.input-buffer, so updates and saved settings carry over); white Saturn logo and menu icon; new themes that change the whole window (a gradient, drawn art behind it, accent pair, tinted text): Deep space (Kosmos, Nebula, Void), Planets (Saturn, Mars, Neptune), Phenomena (Aurora, Supernova, Comet); the Themes tab shows them by group with a small preview of the window on each card; the update window uses the theme too.

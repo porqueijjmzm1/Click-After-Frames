@@ -1,4 +1,4 @@
-// Input Buffer (was Click Before Frames) v2.9 (cube-style wave, wave auto-release, orb alignment, full ghost state, drift check, in-game console on F9)
+// Kosmos (was Input Buffer, and Click Before Frames before that) v2.9 (cube-style wave, wave auto-release, orb alignment, full ghost state, drift check, in-game console on F9)
 //
 // When you click (or release, in wave / robot), a hidden "ghost" player is simulated
 // ahead with your input. If the ghost dies, the input is retried with 1..N ticks of
@@ -31,6 +31,8 @@
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/ui/Popup.hpp>
 #include <map>
+#include <functional>
+#include <optional>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/RingObject.hpp>
 #ifdef GEODE_IS_WINDOWS
@@ -431,7 +433,7 @@ namespace {
             buf.logLines.pop_front();
         }
         if (buf.console) {
-            std::printf("[InputBuffer] %s\n", msg.c_str());
+            std::printf("[Kosmos] %s\n", msg.c_str());
         }
         // v2.71: redrawn once per physics step instead of on every line (a click that logs
         // 4 lines rebuilt all 8 labels 4 times)
@@ -828,7 +830,7 @@ namespace {
         auto* mod = Mod::get();
         auto* layer = GameManager::get()->m_playLayer;
         std::string text;
-        text += fmt::format("Input Buffer {} console export\n", mod->getVersion().toVString());
+        text += fmt::format("Kosmos {} console export\n", mod->getVersion().toVString());
         if (layer && layer->m_level) {
             text += fmt::format("Level: {} (id {}){}\n", std::string(layer->m_level->m_levelName), layer->m_level->m_levelID.value(),
                 layer->m_isPracticeMode ? ", practice" : "");
@@ -4872,8 +4874,8 @@ static void circle(CCDrawNode* d, CCPoint c, float r, ccColor4F fill, int segmen
     d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
 }
 
-// a rounded rectangle (convex, so one polygon)
-static void roundRect(CCDrawNode* d, CCRect r, float rad, ccColor4F fill, float border = 0.f, ccColor4F borderColor = { 0, 0, 0, 0 }) {
+// the corners of a rounded rectangle, anticlockwise (convex, so one polygon)
+static std::vector<CCPoint> roundRectPoints(CCRect r, float rad) {
     rad = std::min({ rad, r.size.width / 2.f, r.size.height / 2.f });
     std::vector<CCPoint> pts;
     CCPoint centers[] = { { r.getMaxX() - rad, r.getMaxY() - rad }, { r.getMinX() + rad, r.getMaxY() - rad },
@@ -4891,6 +4893,12 @@ static void roundRect(CCDrawNode* d, CCRect r, float rad, ccColor4F fill, float 
     while (pts.size() > 2 && ccpDistance(pts.back(), pts.front()) <= 0.05f) {
         pts.pop_back();
     }
+    return pts;
+}
+
+// a rounded rectangle
+static void roundRect(CCDrawNode* d, CCRect r, float rad, ccColor4F fill, float border = 0.f, ccColor4F borderColor = { 0, 0, 0, 0 }) {
+    auto pts = roundRectPoints(r, rad);
     d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
 }
 
@@ -4899,13 +4907,437 @@ static char const* font() {
     return "exo2.fnt"_spr;
 }
 
+// ---------- v3.4 themes ----------
+
+static ccColor3B mixColor(ccColor3B a, ccColor3B b, float t) {
+    auto m = [t](GLubyte x, GLubyte y) { return static_cast<GLubyte>(std::clamp(std::lround(x + (y - x) * t), 0L, 255L)); };
+    return { m(a.r, b.r), m(a.g, b.g), m(a.b, b.b) };
+}
+
+// the art a theme draws behind the window
+enum class Deco { Stars, Clouds, Orbit, Rings, Dust, Horizon, Aurora, Burst, Comets };
+
+// a theme is a whole look: the window's gradient, its backdrop, the accent pair and the
+// text's tint
+struct MenuTheme {
+    char const* name;
+    int group;              // THEME_GROUPS index
+    ccColor3B main, soft;   // the accent, and a light one for icons and values
+    ccColor3B second;       // the accent's partner, for the header line and the backdrop
+    ccColor3B top, bottom;  // the window's gradient
+    Deco deco;
+};
+
+static constexpr char const* THEME_GROUPS[] = { "DEEP SPACE", "PLANETS", "PHENOMENA" };
+
+// the "Menu theme" setting's choices (same names), shown by group in the Themes tab
+static MenuTheme const THEMES[] = {
+    { "Kosmos", 0, { 104, 122, 255 }, { 198, 206, 255 }, { 176, 104, 255 }, { 21, 23, 46 }, { 7, 8, 18 }, Deco::Stars },
+    { "Nebula", 0, { 196, 82, 236 }, { 240, 198, 255 }, { 255, 96, 168 }, { 34, 12, 42 }, { 11, 6, 20 }, Deco::Clouds },
+    { "Void", 0, { 124, 132, 150 }, { 232, 234, 240 }, { 255, 255, 255 }, { 20, 20, 23 }, { 4, 4, 5 }, Deco::Orbit },
+    { "Saturn", 1, { 218, 160, 56 }, { 252, 226, 168 }, { 255, 206, 128 }, { 36, 28, 16 }, { 12, 9, 6 }, Deco::Rings },
+    { "Mars", 1, { 222, 80, 52 }, { 255, 194, 168 }, { 255, 146, 78 }, { 42, 15, 11 }, { 14, 6, 5 }, Deco::Dust },
+    { "Neptune", 1, { 36, 136, 255 }, { 172, 210, 255 }, { 44, 214, 255 }, { 8, 24, 52 }, { 3, 8, 22 }, Deco::Horizon },
+    { "Aurora", 2, { 28, 190, 128 }, { 178, 252, 220 }, { 136, 100, 255 }, { 6, 24, 28 }, { 3, 8, 14 }, Deco::Aurora },
+    { "Supernova", 2, { 246, 68, 114 }, { 255, 194, 208 }, { 255, 170, 60 }, { 42, 10, 22 }, { 13, 4, 9 }, Deco::Burst },
+    { "Comet", 2, { 30, 166, 210 }, { 192, 240, 255 }, { 222, 246, 255 }, { 10, 26, 38 }, { 4, 10, 16 }, Deco::Comets },
+};
+
+// the theme in the "Menu theme" setting (an old or unknown name gets the first one)
+static MenuTheme const& currentTheme() {
+    auto name = Mod::get()->getSettingValue<std::string>("menu-theme");
+    for (auto const& t : THEMES) {
+        if (name == t.name) {
+            return t;
+        }
+    }
+    return THEMES[0];
+}
+
+// the text's colours, tinted a little by the theme
+struct Ink {
+    ccColor3B text, muted, dim;
+};
+static Ink inkFor(MenuTheme const& t) {
+    return { mixColor({ 240, 242, 248 }, t.soft, 0.12f), mixColor({ 138, 145, 162 }, t.soft, 0.22f), mixColor({ 94, 100, 118 }, t.soft, 0.16f) };
+}
+
+// cuts a convex polygon to another one (both anticlockwise)
+static std::vector<CCPoint> clipConvex(std::vector<CCPoint> poly, std::vector<CCPoint> const& clip) {
+    for (size_t i = 0; i < clip.size() && poly.size() >= 3; ++i) {
+        CCPoint a = clip[i], b = clip[(i + 1) % clip.size()];
+        auto side = [&](CCPoint p) { return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x); };
+        std::vector<CCPoint> out;
+        for (size_t j = 0; j < poly.size(); ++j) {
+            CCPoint p = poly[j], q = poly[(j + 1) % poly.size()];
+            float sp = side(p), sq = side(q);
+            if (sp >= 0.f) {
+                out.push_back(p);
+            }
+            if ((sp >= 0.f) != (sq >= 0.f)) {
+                float s = sp / (sp - sq);
+                out.push_back({ p.x + (q.x - p.x) * s, p.y + (q.y - p.y) * s });
+            }
+        }
+        poly = std::move(out);
+    }
+    return poly;
+}
+
+// fills a convex shape, cut to `clip` (the window's shape)
+static void fillClipped(CCDrawNode* d, std::vector<CCPoint> pts, std::vector<CCPoint> const& clip, ccColor4F fill) {
+    pts = clipConvex(std::move(pts), clip);
+    std::vector<CCPoint> clean;
+    for (auto const& p : pts) {
+        if (clean.empty() || ccpDistance(clean.back(), p) > 0.05f) {
+            clean.push_back(p);
+        }
+    }
+    while (clean.size() > 2 && ccpDistance(clean.back(), clean.front()) <= 0.05f) {
+        clean.pop_back();
+    }
+    if (clean.size() >= 3) {
+        d->drawPolygon(clean.data(), static_cast<unsigned>(clean.size()), fill, 0.f, { 0, 0, 0, 0 });
+    }
+}
+
+static std::vector<CCPoint> ellipsePoints(CCPoint c, float rx, float ry, float rot, int segments) {
+    std::vector<CCPoint> pts;
+    float cr = std::cos(rot), sr = std::sin(rot);
+    for (int i = 0; i < segments; ++i) {
+        float a = i * 2.f * 3.14159265f / segments;
+        float x = rx * std::cos(a), y = ry * std::sin(a);
+        pts.push_back({ c.x + x * cr - y * sr, c.y + x * sr + y * cr });
+    }
+    return pts;
+}
+
+// a convex shape given in any winding
+static void fillAnyWay(CCDrawNode* d, std::vector<CCPoint> pts, std::vector<CCPoint> const& clip, ccColor4F fill) {
+    float area = 0.f;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        auto const& p = pts[i];
+        auto const& q = pts[(i + 1) % pts.size()];
+        area += p.x * q.y - q.x * p.y;
+    }
+    if (area < 0.f) {
+        std::reverse(pts.begin(), pts.end());
+    }
+    fillClipped(d, std::move(pts), clip, fill);
+}
+
+// a vertical gradient in a rounded rectangle: strips in the middle, flat at the rounded ends
+static void gradientRect(CCDrawNode* d, CCRect r, float rad, ccColor3B top, ccColor3B bottom) {
+    rad = std::min({ rad, r.size.width / 2.f, r.size.height / 2.f });
+    roundRect(d, r, rad, col(bottom, 1.f));
+    roundRect(d, { r.getMinX(), r.getMaxY() - 2.f * rad, r.size.width, 2.f * rad }, rad, col(top, 1.f));
+    float y0 = r.getMinY() + rad, y1 = r.getMaxY() - rad;
+    int n = std::clamp(static_cast<int>((y1 - y0) / 2.f), 2, 80);
+    for (int i = 0; i < n; ++i) {
+        float a = y0 + (y1 - y0) * i / n, b = y0 + (y1 - y0) * (i + 1) / n;
+        CCPoint q[] = { { r.getMinX(), a }, { r.getMaxX(), a }, { r.getMaxX(), b }, { r.getMinX(), b } };
+        d->drawPolygon(q, 4, col(mixColor(bottom, top, ((a + b) / 2.f - y0) / (y1 - y0)), 1.f), 0.f, { 0, 0, 0, 0 });
+    }
+}
+
+// a small random number source, so a theme's backdrop comes out the same every time
+struct Dice {
+    uint32_t s;
+    float next() {
+        s = s * 1664525u + 1013904223u;
+        return static_cast<float>(s >> 8) / 16777216.f;
+    }
+};
+
+// a four-pointed sparkle
+static void sparkle(CCDrawNode* d, CCPoint c, float r, ccColor4F color) {
+    CCPoint up[] = { { c.x, c.y + r }, { c.x - r * 0.18f, c.y }, { c.x, c.y - r }, { c.x + r * 0.18f, c.y } };
+    CCPoint across[] = { { c.x + r, c.y }, { c.x, c.y + r * 0.18f }, { c.x - r, c.y }, { c.x, c.y - r * 0.18f } };
+    d->drawPolygon(up, 4, color, 0.f, { 0, 0, 0, 0 });
+    d->drawPolygon(across, 4, color, 0.f, { 0, 0, 0, 0 });
+}
+
+// The theme's art in the rectangle r (the window, or a card's preview), cut to `clip`. Sizes
+// go with the height and the big pieces sit from the right edge, so a wide preview is the
+// window scaled down.
+static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CCPoint> const& clip, bool small) {
+    float w = r.size.width, h = r.size.height;
+    auto at = [&](float u, float v) { return CCPoint { r.getMinX() + u * w, r.getMinY() + v * h }; };
+    auto fromRight = [&](float x, float v) { return CCPoint { r.getMaxX() - x * h, r.getMinY() + v * h }; };
+    auto bgAt = [&](float v) { return mixColor(t.bottom, t.top, std::clamp(v, 0.f, 1.f)); };
+    float dot = std::max(h / 276.f, 0.3f);  // small things don't vanish in the preview
+    Dice dice { static_cast<uint32_t>(t.deco) * 7919u + 17u };
+
+    auto stars = [&](int count, float alpha) {
+        int n = small ? std::max(count / 3, 4) : count;
+        for (int i = 0; i < n; ++i) {
+            float u = 0.03f + 0.94f * dice.next(), v = 0.05f + 0.88f * dice.next();
+            float k = dice.next();
+            ccColor3B c = mixColor({ 255, 255, 255 }, t.soft, dice.next() * 0.6f);
+            circle(d, at(u, v), (0.5f + 1.3f * k * k) * dot, col(c, alpha * (0.35f + 0.65f * dice.next())), 8);
+        }
+    };
+    // a soft round glow: rings that add up towards the middle
+    auto glow = [&](CCPoint c, float rad, ccColor3B color, float alpha, int rings) {
+        for (int i = 0; i < rings; ++i) {
+            float k = 1.f - static_cast<float>(i) / rings;
+            fillClipped(d, ellipsePoints(c, rad * k, rad * k, 0.f, 40), clip, col(color, alpha));
+        }
+    };
+    // a band along an ellipse between two angles, in pieces (an opaque colour, so the joins don't show)
+    auto band = [&](CCPoint c, float rx, float ry, float rot, float thick, float a0, float a1, int pieces,
+        std::function<std::optional<ccColor3B>(CCPoint)> color) {
+        float cr = std::cos(rot), sr = std::sin(rot);
+        auto on = [&](float a, float k) {
+            float x = (rx - k) * std::cos(a), y = (ry - k) * std::sin(a);
+            return CCPoint { c.x + x * cr - y * sr, c.y + x * sr + y * cr };
+        };
+        for (int i = 0; i < pieces; ++i) {
+            float a = a0 + (a1 - a0) * i / pieces, b = a0 + (a1 - a0) * (i + 1) / pieces;
+            if (auto c = color(on((a + b) / 2.f, thick / 2.f))) {
+                fillAnyWay(d, { on(a, 0.f), on(b, 0.f), on(b, thick), on(a, thick) }, clip, col(*c, 1.f));
+            }
+        }
+    };
+
+    switch (t.deco) {
+        case Deco::Stars: {  // a starfield with a faint violet haze
+            glow(fromRight(0.62f, 0.6f), 0.44f * h, t.second, 0.022f, 8);
+            glow(at(0.42f, 0.2f), 0.3f * h, t.main, 0.018f, 6);
+            stars(60, 0.8f);
+            sparkle(d, fromRight(0.3f, 0.78f), 5.5f * dot, col(t.soft, 0.8f));
+            sparkle(d, at(0.4f, 0.62f), 4.f * dot, col(t.soft, 0.6f));
+            break;
+        }
+        case Deco::Clouds: {  // nebula clouds in the two accents
+            glow(fromRight(0.5f, 0.62f), 0.38f * h, t.main, 0.03f, 8);
+            glow(fromRight(0.95f, 0.28f), 0.3f * h, t.second, 0.03f, 8);
+            glow(fromRight(0.2f, 0.22f), 0.2f * h, t.second, 0.026f, 6);
+            glow(at(0.36f, 0.82f), 0.18f * h, t.main, 0.024f, 6);
+            stars(34, 0.6f);
+            sparkle(d, fromRight(0.62f, 0.5f), 4.5f * dot, col(t.soft, 0.7f));
+            break;
+        }
+        case Deco::Orbit: {  // almost nothing: one orbit and a small moon on it
+            stars(18, 0.45f);
+            CCPoint c = fromRight(0.62f, 0.42f);
+            circle(d, c, 0.075f * h, col(t.soft, 0.07f), 28);
+            auto orbit = ellipsePoints(c, 0.5f * h, 0.15f * h, 0.26f, 64);
+            d->drawPolygon(orbit.data(), static_cast<unsigned>(orbit.size()), { 0, 0, 0, 0 }, 0.35f * dot, col(t.soft, 0.16f));
+            float a = -2.3f, cr = std::cos(0.26f), sr = std::sin(0.26f);
+            float x = 0.5f * h * std::cos(a), y = 0.15f * h * std::sin(a);
+            circle(d, { c.x + x * cr - y * sr, c.y + x * sr + y * cr }, 0.03f * h, col(t.soft, 0.6f), 16);
+            break;
+        }
+        case Deco::Rings: {  // a ringed planet in the corner
+            glow(fromRight(0.6f, 0.4f), 0.44f * h, t.main, 0.016f, 7);
+            stars(26, 0.5f);
+            CCPoint c = fromRight(0.6f, 0.38f);
+            float R = 0.17f * h, rx = 0.36f * h, ry = 0.085f * h, rot = 0.33f, thick = 0.045f * h;
+            auto ring = [&](CCPoint) -> std::optional<ccColor3B> { return mixColor(bgAt(0.38f), t.soft, 0.2f); };
+            band(c, rx, ry, rot, thick, 0.f, 2.f * 3.14159265f, small ? 24 : 72, ring);  // behind
+            circle(d, c, R, col(mixColor(bgAt(0.38f), t.main, 0.2f), 1.f), 40);
+            // the front of the ring over the planet, with a gap around it
+            auto gap = [&](CCPoint p) -> std::optional<ccColor3B> {
+                if (ccpDistance(p, c) > R + thick) {
+                    return std::nullopt;
+                }
+                return mixColor(bgAt((p.y - r.getMinY()) / h), t.main, 0.08f);
+            };
+            band(c, rx + thick * 0.6f, ry + thick * 0.6f, rot, thick * 2.2f, 3.14159265f, 2.f * 3.14159265f, small ? 18 : 54, gap);
+            band(c, rx, ry, rot, thick, 3.14159265f, 2.f * 3.14159265f, small ? 18 : 54, ring);
+            break;
+        }
+        case Deco::Dust: {  // a dust storm over a red horizon, and two small moons
+            glow(at(0.5f, -0.9f), 1.15f * h, t.main, 0.03f, 7);
+            int n = small ? 24 : 80;
+            for (int i = 0; i < n; ++i) {
+                float u = 0.02f + 0.96f * dice.next(), v = 0.05f + 0.86f * std::pow(dice.next(), 1.5f);
+                float k = dice.next();
+                circle(d, at(u, v), (0.5f + 1.4f * k * k) * dot, col(mixColor(t.main, t.second, dice.next()), 0.12f + 0.3f * dice.next()), 8);
+            }
+            circle(d, fromRight(0.36f, 0.68f), 0.034f * h, col(t.soft, 0.3f), 24);
+            circle(d, fromRight(0.8f, 0.75f), 0.019f * h, col(t.soft, 0.24f), 16);
+            break;
+        }
+        case Deco::Horizon: {  // a banded planet rising in the corner
+            stars(44, 0.65f);
+            CCPoint c = fromRight(-0.05f, -0.62f);
+            float R = 1.f * h;
+            for (int i = 6; i >= 1; --i) {
+                fillClipped(d, ellipsePoints(c, R + i * 0.022f * h, R + i * 0.022f * h, 0.f, 96), clip, col(t.second, 0.035f));
+            }
+            ccColor3B body = mixColor(bgAt(0.2f), t.main, 0.22f);
+            auto disc = ellipsePoints(c, R, R, 0.f, 96);
+            fillClipped(d, disc, clip, col(body, 1.f));
+            // its bands: the disc cut to thin strips
+            float bands[][2] = { { 0.05f, 0.09f }, { 0.15f, 0.17f }, { 0.23f, 0.28f } };
+            for (auto const& b : bands) {
+                std::vector<CCPoint> strip { { r.getMinX(), r.getMinY() + b[0] * h }, { r.getMaxX(), r.getMinY() + b[0] * h },
+                    { r.getMaxX(), r.getMinY() + b[1] * h }, { r.getMinX(), r.getMinY() + b[1] * h } };
+                fillClipped(d, clipConvex(disc, strip), clip, col(mixColor(body, t.second, 0.14f), 1.f));
+            }
+            break;
+        }
+        case Deco::Aurora: {  // curtains of light
+            stars(36, 0.55f);
+            int n = small ? 34 : 96;
+            for (int ribbon = 0; ribbon < 2; ++ribbon) {
+                for (int i = 0; i < n; ++i) {
+                    float u = 0.04f + 0.92f * i / (n - 1);
+                    float base = ribbon == 0 ? 0.48f + 0.12f * std::sin(u * 7.f + 0.4f) + 0.05f * std::sin(u * 17.f)
+                                             : 0.26f + 0.07f * std::sin(u * 5.f + 2.f);
+                    float tall = (ribbon == 0 ? 0.2f + 0.14f * std::pow(std::sin(u * 5.f + 1.3f), 2.f) : 0.12f) * h;
+                    float cw = 0.55f * 0.92f * w / n;
+                    float x = r.getMinX() + u * w - cw / 2.f, y = r.getMinY() + base * h;
+                    ccColor3B c = mixColor(t.main, t.second, u);
+                    float a = (ribbon == 0 ? 0.08f : 0.05f) * (0.7f + 0.3f * std::sin(u * 23.f));
+                    // brighter at the foot, fading up
+                    float parts[][3] = { { 0.f, 0.3f, 1.8f }, { 0.3f, 0.65f, 1.f }, { 0.65f, 1.f, 0.45f } };
+                    for (auto const& p : parts) {
+                        CCPoint q[] = { { x, y + tall * p[0] }, { x + cw, y + tall * p[0] }, { x + cw, y + tall * p[1] }, { x, y + tall * p[1] } };
+                        d->drawPolygon(q, 4, col(c, a * p[2]), 0.f, { 0, 0, 0, 0 });
+                    }
+                }
+            }
+            break;
+        }
+        case Deco::Burst: {  // a star going off: rays and a hot core
+            CCPoint c = fromRight(0.55f, 0.6f);
+            glow(c, 0.5f * h, t.second, 0.02f, 8);
+            stars(30, 0.5f);
+            int rays = 22;
+            for (int i = 0; i < rays; ++i) {
+                float a = i * 2.f * 3.14159265f / rays + (dice.next() - 0.5f) * 0.18f;
+                float len = (0.35f + 0.6f * dice.next()) * h, half = (0.008f + 0.01f * dice.next()) * h;
+                CCPoint dir { std::cos(a), std::sin(a) }, side { -dir.y * half, dir.x * half };
+                fillAnyWay(d, { { c.x + side.x, c.y + side.y }, { c.x + dir.x * len, c.y + dir.y * len }, { c.x - side.x, c.y - side.y } }, clip,
+                    col(i % 2 ? t.second : t.main, 0.07f));
+            }
+            glow(c, 0.2f * h, t.main, 0.04f, 6);
+            circle(d, c, 0.05f * h, col(t.soft, 0.3f), 24);
+            circle(d, c, 0.022f * h, white(0.85f), 16);
+            break;
+        }
+        case Deco::Comets: {  // comets with long tails
+            stars(42, 0.6f);
+            CCPoint dir { 0.874f, 0.486f };  // the tails point up and right
+            CCPoint heads[] = { at(0.42f, 0.34f), fromRight(0.55f, 0.6f), fromRight(0.22f, 0.24f), at(0.3f, 0.72f) };
+            float lengths[] = { 0.55f, 0.42f, 0.3f, 0.25f };
+            for (int i = 0; i < 4; ++i) {
+                CCPoint p = heads[i];
+                float len = lengths[i] * h, half = 0.022f * h * (lengths[i] + 0.4f);
+                for (float k : { 1.f, 0.6f, 0.3f }) {
+                    CCPoint side { -dir.y * half * (0.5f + 0.5f * k), dir.x * half * (0.5f + 0.5f * k) };
+                    fillAnyWay(d, { { p.x + side.x, p.y + side.y }, { p.x + dir.x * len * k, p.y + dir.y * len * k }, { p.x - side.x, p.y - side.y } },
+                        clip, col(mixColor(t.soft, t.second, k), 0.06f));
+                }
+                circle(d, p, 0.03f * h * (lengths[i] + 0.4f), col(t.soft, 0.18f), 16);
+                circle(d, p, std::max(0.011f * h, 0.45f), white(0.85f), 12);
+            }
+            break;
+        }
+    }
+}
+
+// the window's background: its gradient and the theme's art, cut to its rounded shape
+static void drawBackdrop(CCDrawNode* d, MenuTheme const& t, CCRect r, float rad, bool small) {
+    gradientRect(d, r, rad, t.top, t.bottom);
+    drawDeco(d, t, r, roundRectPoints(r, rad), small);
+}
+
+// a few sparkles that slowly pulse over the backdrop
+static void addTwinkles(CCNode* parent, MenuTheme const& t, CCRect r, int z) {
+    Dice dice { 4242u + static_cast<uint32_t>(t.deco) * 31u };
+    for (int i = 0; i < 5; ++i) {
+        auto* s = CCDrawNode::create();
+        sparkle(s, { 0.f, 0.f }, 3.f + 2.5f * dice.next(), col(mixColor({ 255, 255, 255 }, t.soft, 0.5f), 0.75f));
+        s->setPosition({ r.getMinX() + r.size.width * (0.3f + 0.66f * dice.next()), r.getMinY() + r.size.height * (0.08f + 0.72f * dice.next()) });
+        s->setScale(0.15f + 0.85f * dice.next());
+        float up = 1.1f + dice.next(), down = 1.3f + dice.next();
+        s->runAction(CCRepeatForever::create(CCSequence::create(CCEaseSineInOut::create(CCScaleTo::create(up, 1.f)),
+            CCEaseSineInOut::create(CCScaleTo::create(down, 0.15f)), nullptr)));
+        parent->addChild(s, z);
+    }
+}
+
+// the window the menu and the update window share: a shadow, the theme's backdrop, the header
+// (its line in the accents) and the Saturn icon
+static void drawWindow(CCNode* parent, MenuTheme const& t, float w, float h, float header) {
+    auto* back = CCDrawNode::create();
+    for (int i = 6; i >= 1; --i) {
+        float g = i * 1.6f;
+        roundRect(back, { -g, -g - 2.f, w + 2.f * g, h + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
+    }
+    drawBackdrop(back, t, { 0.f, 0.f, w, h }, 12.f, false);
+    parent->addChild(back, -2);
+    addTwinkles(parent, t, { 0.f, 0.f, w, h }, -2);
+
+    auto* d = CCDrawNode::create();
+    roundRect(d, { 0.f, 0.f, w, h }, 12.f, { 0, 0, 0, 0 }, 0.6f, white(0.1f));
+    roundRect(d, { 0.f, h - header - 1.f, w, header + 1.f }, 12.f, white(0.025f));
+    d->drawSegment({ 1.f, h - header }, { w - 1.f, h - header }, 0.4f, white(0.07f));
+    float cy = h - header / 2.f;
+    roundRect(d, { 10.f, cy - 11.f, 22.f, 22.f }, 6.f, col(t.main, 0.22f), 0.6f, col(t.main, 0.75f));
+    parent->addChild(d, -1);
+    auto* line = CCLayerGradient::create({ t.main.r, t.main.g, t.main.b, 230 }, { t.second.r, t.second.g, t.second.b, 0 }, { 1.f, 0.f });
+    line->setContentSize({ w * 0.6f, 1.f });
+    line->setPosition({ 12.f, h - header - 0.5f });
+    parent->addChild(line, 0);
+    if (auto* icon = CCSprite::create("saturn.png"_spr)) {
+        icon->setScale(17.f / icon->getContentSize().width);
+        icon->setColor(t.soft);
+        icon->setPosition({ 21.f, cy });
+        parent->addChild(icon, 2);
+    }
+}
+
+// a theme's card preview: the window scaled down, with its header, sidebar and two tiles
+static void drawPreview(CCDrawNode* d, MenuTheme const& t, CCRect r) {
+    float rad = 4.f;
+    drawBackdrop(d, t, r, rad, true);
+    float x0 = r.getMinX(), y0 = r.getMinY(), w = r.size.width, h = r.size.height;
+    float top = y0 + h - 6.5f;  // the header's line
+    d->drawSegment({ x0 + 1.f, top }, { x0 + w - 1.f, top }, 0.2f, white(0.08f));
+    d->drawSegment({ x0 + 3.f, top }, { x0 + w * 0.45f, top }, 0.3f, col(t.main, 0.9f));
+    // the icon, the title and the status pill
+    circle(d, { x0 + 5.f, y0 + h - 3.3f }, 1.4f, col(t.soft, 1.f), 12);
+    d->drawSegment({ x0 + 2.6f, y0 + h - 4.2f }, { x0 + 7.4f, y0 + h - 2.4f }, 0.25f, col(t.soft, 1.f));
+    roundRect(d, { x0 + 9.f, y0 + h - 4.2f, 15.f, 1.8f }, 0.9f, white(0.55f));
+    roundRect(d, { x0 + w - 13.f, y0 + h - 4.6f, 9.f, 2.6f }, 1.3f, col({ 80, 222, 140 }, 0.35f));
+    // the sidebar, its first tab picked
+    float sw = w * 0.25f;
+    roundRect(d, { x0 + 2.f, y0 + 2.f, sw, top - y0 - 3.5f }, 2.f, col({ 0, 0, 0 }, 0.28f));
+    for (int i = 0; i < 3; ++i) {
+        float ty = top - 4.5f - i * 4.f;
+        if (i == 0) {
+            roundRect(d, { x0 + 3.f, ty - 1.6f, sw - 2.f, 3.2f }, 1.f, col(t.main, 0.3f));
+        }
+        roundRect(d, { x0 + 4.5f, ty - 0.6f, sw * (i == 0 ? 0.55f : 0.45f), 1.2f }, 0.6f, i == 0 ? col(t.soft, 0.9f) : white(0.3f));
+    }
+    // two tiles: one switched on, one with a slider
+    float cx = x0 + sw + 4.f, cwid = x0 + w - 3.f - cx;
+    float t1 = top - 8.f;
+    roundRect(d, { cx, t1 - 2.8f, cwid, 5.6f }, 1.5f, col(t.main, 0.16f), 0.2f, col(t.main, 0.5f));
+    roundRect(d, { cx + 2.f, t1 - 0.5f, cwid * 0.4f, 1.f }, 0.5f, white(0.6f));
+    roundRect(d, { cx + cwid - 7.f, t1 - 1.6f, 5.5f, 3.2f }, 1.6f, col(t.main, 1.f));
+    circle(d, { cx + cwid - 3.1f, t1 }, 1.f, white(1.f), 10);
+    float t2 = t1 - 7.f;
+    roundRect(d, { cx, t2 - 2.8f, cwid, 5.6f }, 1.5f, white(0.05f), 0.2f, white(0.09f));
+    roundRect(d, { cx + 2.f, t2 - 0.5f, cwid - 4.f, 1.f }, 0.5f, white(0.12f));
+    roundRect(d, { cx + 2.f, t2 - 0.5f, (cwid - 4.f) * 0.62f, 1.f }, 0.5f, col(t.soft, 0.9f));
+    // the outline on top
+    roundRect(d, r, rad, { 0, 0, 0, 0 }, 0.4f, white(0.12f));
+}
+
 void checkForUpdate(bool manual);  // v3.3, with the update window
 }
 
-// v3.0 menu: a clean dark window. A header with the mouse icon and a live status pill, a
-// sidebar of tabs (Buffer, Prediction, Modes, Frames, Tools) and pages made of tiles you can
-// tap anywhere to switch. Drag it by the header. Opens with the menu key or Right Shift in a
-// level, or the mouse button on the main and pause menus.
+// v3.0 menu: a clean dark window. A header with the Saturn icon and a live status pill, a
+// sidebar of tabs (Buffer, Prediction, Modes, Frames, Tools, Themes) and pages made of tiles
+// you can tap anywhere to switch. Drag it by the header. Opens with the menu key or Right Shift
+// in a level, or the Saturn button on the main and pause menus. v3.4: the theme draws the
+// whole window (see drawWindow).
 class BufferMenu : public geode::Popup {
     struct Option {
         char const* key;    // mod setting, or nullptr for the runtime path view
@@ -4953,43 +5385,11 @@ class BufferMenu : public geode::Popup {
         "Helpers for each game mode, and latency.",
         "Your own limit for each game mode. 0 = no buffer.",
         "What you see while playing, stats, the log and updates.",
-        "The menu's colours. Tap one to use it.",
+        "A whole new look for the menu. Tap one to use it.",
     };
     // one chip per stage, in STAGES order
     static constexpr char const* STAGE_CHIPS[] = { "0.5f", "1f", "2f", "4f", "6f", "8f", "Custom", "Off" };
     static_assert(static_cast<int>(std::size(STAGE_CHIPS)) == STAGE_COUNT);
-
-    struct Theme {
-        ccColor3B main, soft;
-    };
-    struct ThemeDef {
-        char const* name;
-        ccColor3B main, soft;
-    };
-    // v3.1: the "Menu theme" setting's choices, in the order the Themes tab shows them
-    static inline const ThemeDef THEMES[] = {
-        { "Blue", { 62, 152, 255 }, { 176, 214, 255 } },
-        { "Purple", { 146, 108, 255 }, { 208, 192, 255 } },
-        { "Pink", { 255, 98, 176 }, { 255, 192, 226 } },
-        { "Red", { 240, 72, 86 }, { 255, 186, 192 } },
-        { "Orange", { 255, 138, 48 }, { 255, 208, 160 } },
-        { "Gold", { 236, 190, 60 }, { 250, 230, 170 } },
-        { "Green", { 52, 205, 124 }, { 178, 242, 204 } },
-        { "Teal", { 38, 198, 206 }, { 170, 236, 240 } },
-        { "Dark", { 122, 130, 148 }, { 226, 230, 238 } },
-    };
-
-public:
-    // the "Menu theme" setting picks the accent colour (blue by default)
-    static Theme currentTheme() {
-        auto name = Mod::get()->getSettingValue<std::string>("menu-theme");
-        for (auto const& t : THEMES) {
-            if (name == t.name) {
-                return { t.main, t.soft };
-            }
-        }
-        return { THEMES[0].main, THEMES[0].soft };
-    }
 
 private:
     static constexpr float W = 440.f;
@@ -5007,10 +5407,10 @@ private:
     static inline bool s_moved = false;
     static inline CCPoint s_pos {};
 
-    Theme m_t = currentTheme();
-    ccColor3B m_text { 236, 239, 245 };
-    ccColor3B m_muted { 140, 148, 168 };
-    ccColor3B m_dim { 96, 103, 122 };
+    MenuTheme m_t = currentTheme();
+    ccColor3B m_text = inkFor(m_t).text;
+    ccColor3B m_muted = inkFor(m_t).muted;
+    ccColor3B m_dim = inkFor(m_t).dim;
     ccColor3B m_good { 80, 222, 140 };
     ccColor3B m_bad { 240, 92, 104 };
 
@@ -5183,9 +5583,9 @@ private:
                 break;
             case 5:  // a palette: a ring with three colours
                 circle(d, c, 5.f, { 0, 0, 0, 0 }, 24, 0.6f, color);
-                circle(d, { c.x - 2.f, c.y + 1.4f }, 1.3f, col(THEMES[2].main, 1.f), 10);
+                circle(d, { c.x - 2.f, c.y + 1.4f }, 1.3f, col(THEMES[7].main, 1.f), 10);
                 circle(d, { c.x + 2.f, c.y + 1.4f }, 1.3f, col(THEMES[0].main, 1.f), 10);
-                circle(d, { c.x, c.y - 2.1f }, 1.3f, col(THEMES[5].main, 1.f), 10);
+                circle(d, { c.x, c.y - 2.1f }, 1.3f, col(THEMES[3].main, 1.f), 10);
                 break;
             default:  // four squares: the toolbox
                 for (int i = 0; i < 4; ++i) {
@@ -5204,34 +5604,13 @@ private:
         }
         m_frame = CCNode::create();
         m_mainLayer->addChild(m_frame, 0);
+        // the window in the theme, then the sidebar's panel over it
+        drawWindow(m_frame, m_t, W, H, HEADER);
         auto* d = CCDrawNode::create();
-        // a soft shadow under the window
-        for (int i = 6; i >= 1; --i) {
-            float g = i * 1.6f;
-            roundRect(d, { -g, -g - 2.f, W + 2.f * g, H + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
-        }
-        // the window, the header line and the sidebar panel
-        roundRect(d, { 0.f, 0.f, W, H }, 12.f, col({ 15, 17, 23 }, 0.98f), 0.6f, white(0.09f));
-        roundRect(d, { 0.f, H - HEADER - 1.f, W, HEADER + 1.f }, 12.f, white(0.02f));
-        d->drawSegment({ 1.f, H - HEADER }, { W - 1.f, H - HEADER }, 0.4f, white(0.07f));
-        roundRect(d, { 8.f, 8.f, SIDE - 14.f, H - HEADER - 16.f }, 9.f, col({ 0, 0, 0 }, 0.24f), 0.5f, white(0.05f));
-        // the icon's tile
-        float cy = H - HEADER / 2.f;
-        roundRect(d, { 10.f, cy - 11.f, 22.f, 22.f }, 6.f, col(m_t.main, 0.2f), 0.6f, col(m_t.main, 0.7f));
+        roundRect(d, { 8.f, 8.f, SIDE - 14.f, H - HEADER - 16.f }, 9.f, col({ 0, 0, 0 }, 0.26f), 0.5f, white(0.05f));
         m_frame->addChild(d, -1);
-        // the accent fading out along the header line
-        auto* line = CCLayerGradient::create({ m_t.main.r, m_t.main.g, m_t.main.b, 220 }, { m_t.main.r, m_t.main.g, m_t.main.b, 0 }, { 1.f, 0.f });
-        line->setContentSize({ W * 0.6f, 1.f });
-        line->setPosition({ 12.f, H - HEADER - 0.5f });
-        m_frame->addChild(line, 0);
-
-        if (auto* mouse = CCSprite::create("mouse.png"_spr)) {
-            mouse->setScale(15.f / mouse->getContentSize().height);
-            mouse->setColor(m_t.soft);
-            mouse->setPosition({ 21.f, cy });
-            m_frame->addChild(mouse, 2);
-        }
-        label(m_frame, "Input Buffer", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
+        float cy = H - HEADER / 2.f;
+        label(m_frame, "Kosmos", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
         label(m_frame, Mod::get()->getVersion().toVString(), 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
 
         // the status pill: is the buffer on, and how far
@@ -5445,46 +5824,58 @@ private:
         }
     }
 
+    // v3.4: the themes by group, each card a small preview of the window in that theme
     void pageThemes() {
         heading();
-        auto current = Mod::get()->getSettingValue<std::string>("menu-theme");
-        float cw = (CW - 16.f) / 3.f, ch = 40.f;
-        float top = H - HEADER - 64.f;
-        // an unknown name (an old or hand-edited setting) falls back to the first theme
-        bool known = std::any_of(std::begin(THEMES), std::end(THEMES), [&](ThemeDef const& o) { return current == o.name; });
-        for (int i = 0; i < static_cast<int>(std::size(THEMES)); ++i) {
-            auto const& t = THEMES[i];
-            bool active = known ? current == t.name : i == 0;
-            auto* node = CCNode::create();
-            node->setContentSize({ cw, ch });
-            auto* d = CCDrawNode::create();
-            roundRect(d, { 0.f, 0.f, cw, ch }, 7.f, col({ 24, 27, 36 }, 1.f), active ? 0.9f : 0.5f, active ? col(t.main, 1.f) : white(0.08f));
-            // a little preview: the colour, a switch that's on and a slider, in this theme
-            circle(d, { 15.f, ch / 2.f }, 8.5f, col(t.main, 1.f), 28);
-            circle(d, { 12.5f, ch / 2.f + 2.5f }, 3.f, col(t.soft, 0.7f), 16);
-            roundRect(d, { 30.f, 7.f, 18.f, 9.f }, 4.5f, col(t.main, 1.f));
-            circle(d, { 43.5f, 11.5f }, 3.f, white(1.f), 14);
-            roundRect(d, { 53.f, 9.5f, cw - 61.f, 4.f }, 2.f, white(0.1f));
-            roundRect(d, { 53.f, 9.5f, (cw - 61.f) * 0.6f, 4.f }, 2.f, col(t.soft, 0.9f));
-            if (active) {
-                circle(d, { cw - 10.f, ch - 10.f }, 5.f, col(t.main, 1.f), 20);
-                d->drawSegment({ cw - 12.4f, ch - 10.f }, { cw - 10.6f, ch - 11.8f }, 0.55f, white(1.f));
-                d->drawSegment({ cw - 10.6f, ch - 11.8f }, { cw - 7.6f, ch - 8.4f }, 0.55f, white(1.f));
+        auto const& current = currentTheme();
+        float cw = (CW - 12.f) / 3.f, ch = 46.f;
+        float y = H - HEADER - 46.f;  // the first group's name
+        for (int g = 0; g < static_cast<int>(std::size(THEME_GROUPS)); ++g) {
+            auto* name = label(m_page, THEME_GROUPS[g], 0.3f, m_dim, { L, y }, { 0.f, 0.5f });
+            auto* rule = CCDrawNode::create();
+            rule->drawSegment({ L + name->getScaledContentSize().width + 6.f, y }, { R, y }, 0.25f, white(0.07f));
+            m_page->addChild(rule, 1);
+            int slot = 0;
+            for (int i = 0; i < static_cast<int>(std::size(THEMES)); ++i) {
+                if (THEMES[i].group == g) {
+                    themeCard(i, &THEMES[i] == &current, { L + cw / 2.f + slot * (cw + 6.f), y - 7.f - ch / 2.f }, cw, ch);
+                    ++slot;
+                }
             }
-            node->addChild(d);
-            auto* l = CCLabelBMFont::create(t.name, font());
-            l->setColor(active ? m_text : m_muted);
-            l->setAnchorPoint({ 0.f, 0.5f });
-            l->setPosition({ 30.f, ch - 12.f });
-            l->limitLabelWidth(cw - 46.f, 0.46f, 0.2f);
-            node->addChild(l);
-            auto* item = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onTheme));
-            item->m_scaleMultiplier = 1.04f;
-            item->setTag(i);
-            item->setPosition({ L + cw / 2.f + (i % 3) * (cw + 8.f), top - (i / 3) * (ch + 6.f) });
-            m_pageMenu->addChild(item);
+            y -= ch + 15.f;
         }
-        label(m_page, "Also in the mod settings (Menu theme).", 0.32f, m_dim, { L, 30.f }, { 0.f, 0.5f });
+    }
+
+    // a theme's card: its preview, its name, and a tick on the one in use
+    void themeCard(int index, bool active, CCPoint center, float cw, float ch) {
+        auto const& t = THEMES[index];
+        auto* node = CCNode::create();
+        node->setContentSize({ cw, ch });
+        auto* d = CCDrawNode::create();
+        roundRect(d, { 0.f, 0.f, cw, ch }, 7.f, active ? col(t.main, 0.14f) : white(0.035f), active ? 0.9f : 0.5f,
+            active ? col(t.main, 1.f) : white(0.08f));
+        drawPreview(d, t, { 3.f, 14.f, cw - 6.f, ch - 17.f });
+        if (active) {
+            circle(d, { cw - 9.f, 7.5f }, 4.5f, col(t.main, 1.f), 20);
+            d->drawSegment({ cw - 11.2f, 7.5f }, { cw - 9.6f, 5.9f }, 0.5f, white(1.f));
+            d->drawSegment({ cw - 9.6f, 5.9f }, { cw - 6.8f, 9.0f }, 0.5f, white(1.f));
+        }
+        else {
+            circle(d, { cw - 14.f, 7.5f }, 2.6f, col(t.main, 1.f), 14);
+            circle(d, { cw - 8.f, 7.5f }, 2.6f, col(t.second, 1.f), 14);
+        }
+        node->addChild(d);
+        auto* l = CCLabelBMFont::create(t.name, font());
+        l->setColor(active ? m_text : m_muted);
+        l->setAnchorPoint({ 0.f, 0.5f });
+        l->setPosition({ 6.f, 7.5f });
+        l->limitLabelWidth(cw - 28.f, 0.4f, 0.2f);
+        node->addChild(l);
+        auto* item = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onTheme));
+        item->m_scaleMultiplier = 1.04f;
+        item->setTag(index);
+        item->setPosition(center);
+        m_pageMenu->addChild(item);
     }
 
     void rebuildPage() {
@@ -5687,6 +6078,10 @@ private:
         auto const& t = THEMES[sender->getTag()];
         Mod::get()->setSettingValue<std::string>("menu-theme", t.name);
         m_t = currentTheme();
+        auto ink = inkFor(m_t);
+        m_text = ink.text;
+        m_muted = ink.muted;
+        m_dim = ink.dim;
         say("menu theme: {}", t.name);
         buildFrame();
         rebuildPage();
@@ -5851,8 +6246,8 @@ class $modify(BufPauseLayer, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
         saveNow();  // v3.2: pausing
-        auto* top = CCSprite::create("mouse.png"_spr);
-        top->setScale(0.55f);
+        auto* top = CCSprite::create("saturn.png"_spr);
+        top->setScale(0.62f);
         auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::Blue, CircleBaseSize::Medium);
         auto* button = CCMenuItemSpriteExtra::create(sprite, this, menu_selector(BufPauseLayer::onBufferMenu));
         button->setID("click-before-frames-button"_spr);
@@ -5946,7 +6341,7 @@ $on_mod(Loaded) {
         AllocConsole();
         FILE* out = nullptr;
         freopen_s(&out, "CONOUT$", "w", stdout);
-        SetConsoleTitleA("Input Buffer - Live Console");
+        SetConsoleTitleA("Kosmos - Live Console");
     }
 #endif
     if (Loader::get()->isModLoaded("syzzi.click_between_frames")) {
@@ -5955,7 +6350,7 @@ $on_mod(Loaded) {
     if (Loader::get()->isModLoaded("square3ang.cbfextrapolate")) {
         say("CBF Extrapolate detected: visual only, predictions unaffected");
     }
-    say("Input Buffer {} loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off",
+    say("Kosmos {} loaded. Stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off",
         Mod::get()->getVersion().toVString());
     saveNow();  // v3.2: the game's start (keeps the moved-over v3.0 data and the switched-once settings)
 }
@@ -6080,7 +6475,7 @@ class $modify(BufPlayLayer, PlayLayer) {
             buf.panel->addChild(frame);
         }
 
-        auto* title = CCLabelBMFont::create("Input Buffer", "goldFont.fnt");
+        auto* title = CCLabelBMFont::create("Kosmos", "goldFont.fnt");
         title->setScale(0.55f);
         title->setAnchorPoint({ 0.f, 0.5f });
         title->setPosition({ 10.f, H - 14.f });
@@ -6756,7 +7151,7 @@ namespace {
             };
             auto file = web::WebRequest()
                 .timeout(std::chrono::seconds(120))
-                .userAgent("InputBuffer")
+                .userAgent("Kosmos")
                 .followRedirects(true)
                 .onProgress([](web::WebProgress const& progress) {
                     if (auto percent = progress.downloadProgress()) {
@@ -6770,7 +7165,7 @@ namespace {
             auto data = std::move(file).data();
             auto version = packageVersion(data);
             if (version.isErr()) {
-                return fail("The download isn't a valid Input Buffer build.");
+                return fail("The download isn't a valid Kosmos build.");
             }
             auto newVersion = version.unwrap();
             if (!(newVersion > Mod::get()->getVersion())) {
@@ -6850,29 +7245,10 @@ namespace {
         }
 
         void buildFrame() {
-            auto* d = CCDrawNode::create();
-            for (int i = 6; i >= 1; --i) {
-                float g = i * 1.6f;
-                roundRect(d, { -g, -g - 2.f, W + 2.f * g, H + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
-            }
-            roundRect(d, { 0.f, 0.f, W, H }, 12.f, col({ 15, 17, 23 }, 0.98f), 0.6f, white(0.09f));
-            roundRect(d, { 0.f, H - HEADER - 1.f, W, HEADER + 1.f }, 12.f, white(0.02f));
-            d->drawSegment({ 1.f, H - HEADER }, { W - 1.f, H - HEADER }, 0.4f, white(0.07f));
+            drawWindow(m_mainLayer, currentTheme(), W, H, HEADER);
             float cy = H - HEADER / 2.f;
-            roundRect(d, { 10.f, cy - 11.f, 22.f, 22.f }, 6.f, col(m_main, 0.2f), 0.6f, col(m_main, 0.7f));
-            m_mainLayer->addChild(d, -1);
-            auto* line = CCLayerGradient::create({ m_main.r, m_main.g, m_main.b, 220 }, { m_main.r, m_main.g, m_main.b, 0 }, { 1.f, 0.f });
-            line->setContentSize({ W * 0.6f, 1.f });
-            line->setPosition({ 12.f, H - HEADER - 0.5f });
-            m_mainLayer->addChild(line, 0);
-            if (auto* mouse = CCSprite::create("mouse.png"_spr)) {
-                mouse->setScale(15.f / mouse->getContentSize().height);
-                mouse->setColor(m_soft);
-                mouse->setPosition({ 21.f, cy });
-                m_mainLayer->addChild(mouse, 2);
-            }
             label(m_mainLayer, "Update available", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
-            label(m_mainLayer, "Input Buffer", 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
+            label(m_mainLayer, "Kosmos", 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
 
             // the versions: the one you have > the new one
             auto* pillText = label(m_mainLayer, fmt::format("{}  >  {}", Mod::get()->getVersion().toVString(), pendingUpdate.version), 0.42f,
@@ -7027,9 +7403,13 @@ namespace {
                 m_closeBtn->setEnabled(false);
             }
             this->setOpacity(140);
-            auto theme = BufferMenu::currentTheme();
+            auto const& theme = currentTheme();
             m_main = theme.main;
             m_soft = theme.soft;
+            auto ink = inkFor(theme);
+            m_text = ink.text;
+            m_muted = ink.muted;
+            m_dim = ink.dim;
             s_open = this;
             buildFrame();
             buildFooter();
@@ -7099,13 +7479,13 @@ namespace {
                 queueInMainThread([text, manual] {
                     say("update: {}", text);
                     if (manual) {
-                        FLAlertLayer::create("Input Buffer", text, "OK")->show();
+                        FLAlertLayer::create("Kosmos", text, "OK")->show();
                     }
                 });
             };
             auto res = web::WebRequest()
                 .timeout(std::chrono::seconds(15))
-                .userAgent("InputBuffer")
+                .userAgent("Kosmos")
                 .header("Accept", "application/vnd.github+json")
                 .getSync(fmt::format("https://api.github.com/repos/{}/releases/latest", UPDATE_REPO));
             if (res.code() == 404) {
@@ -7170,15 +7550,15 @@ $on_mod(Loaded) {
     }).leak();
 }
 
-// the main menu: a mouse button that opens the menu (with the other buttons at the bottom),
+// the main menu: a Saturn button that opens the menu (with the other buttons at the bottom),
 // and the update check
 class $modify(BufMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) {
             return false;
         }
-        auto* top = CCSprite::create("mouse.png"_spr);
-        top->setScale(0.55f);
+        auto* top = CCSprite::create("saturn.png"_spr);
+        top->setScale(0.62f);
         top->setColor({ 255, 255, 255 });
         auto* sprite = CircleButtonSprite::create(top, CircleBaseColor::Blue, CircleBaseSize::Medium);
         auto* item = CCMenuItemSpriteExtra::create(sprite, this, menu_selector(BufMenuLayer::onBufferMenu));

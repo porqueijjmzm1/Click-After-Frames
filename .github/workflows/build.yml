@@ -52,7 +52,7 @@ jobs:
         with:
           name: Build Output
           path: ${{ steps.build.outputs.build-output }}
-      # a release (run by hand with a version, or a v* tag) publishes InputBuffer.geode with
+      # a release (run by hand with a version, or a v* tag) publishes Kosmos.geode with
       # RELEASE_NOTES.md; any other build replaces TESTEBUFFER.geode on the "teste" pre-release
       - name: Publish the .geode
         env:
@@ -67,9 +67,9 @@ jobs:
             tag="$GITHUB_REF_NAME"
           fi
           if [[ -n "$tag" ]]; then
-            cp "$file" InputBuffer.geode
-            gh release create "$tag" InputBuffer.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "Input Buffer $tag" --notes-file RELEASE_NOTES.md --latest
+            cp "$file" Kosmos.geode
+            gh release create "$tag" Kosmos.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Kosmos $tag" --notes-file RELEASE_NOTES.md --latest
           else
             cp "$file" TESTEBUFFER.geode
             gh release delete teste --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true

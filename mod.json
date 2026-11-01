@@ -5,9 +5,9 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v3.3.1",
+	"version": "v3.4.0",
 	"id": "timbodev.input-buffer",
-	"name": "Input Buffer",
+	"name": "Kosmos",
 	"developer": "timbodev",
 	"description": "Trajectory-based input buffer: delays early clicks/releases by up to 8+ frames, with orb, pad and portal-aware prediction. github.com/raresdalas1009/-predictive-input-buffer",
 	"settings": {
@@ -407,18 +407,18 @@
 		"menu-theme": {
 			"type": "string",
 			"name": "Menu theme",
-			"description": "Accent colour of the in-game menu.",
-			"default": "Blue",
+			"description": "The look of the in-game menu: its gradient, the art behind it and the accent colours. Deep space: Kosmos, Nebula, Void. Planets: Saturn, Mars, Neptune. Phenomena: Aurora, Supernova, Comet.",
+			"default": "Kosmos",
 			"one-of": [
-				"Blue",
-				"Purple",
-				"Pink",
-				"Red",
-				"Orange",
-				"Gold",
-				"Green",
-				"Teal",
-				"Dark"
+				"Kosmos",
+				"Nebula",
+				"Void",
+				"Saturn",
+				"Mars",
+				"Neptune",
+				"Aurora",
+				"Supernova",
+				"Comet"
 			]
 		},
 		"bind-stage": {
