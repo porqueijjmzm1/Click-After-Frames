@@ -1,8 +1,7 @@
-## What's new in v3.3.0
+## What's new in v3.3.1
 
-- **Update window**: when a new version is out, the main menu shows a window in the menu's style with what's new, and you choose: **Download**, **Later** or **Skip version**. The download shows its progress, then offers a restart.
-- **Tools > Updates**: check for a new version by hand (it also shows a skipped version again).
-- The "Auto update" setting is now **Check for updates**: nothing is downloaded without asking.
+- A small release to show off the new **update window**: you're seeing it right now. Pick **Download** to get this version (with a progress bar, then **Restart now**), **Later** to be asked again next time you open the game, or **Skip version** to not see this one again.
+- Everything from v3.3.0 is included: **Tools > Updates** checks by hand, and nothing is downloaded without asking.
 
 ## Install
 
