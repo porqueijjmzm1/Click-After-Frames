@@ -4849,6 +4849,56 @@ namespace {
     }
 }
 
+// v3.3: drawing helpers shared by the menu and the update window
+namespace {
+// CCDrawNode blends premultiplied colours: a see-through colour has to be darkened by its alpha
+static ccColor4F col(ccColor3B c, float a) {
+    return { c.r / 255.f * a, c.g / 255.f * a, c.b / 255.f * a, a };
+}
+
+static ccColor4F white(float a) {
+    return col({ 255, 255, 255 }, a);
+}
+
+// a filled circle as a polygon (the game's drawDot draws squares)
+static void circle(CCDrawNode* d, CCPoint c, float r, ccColor4F fill, int segments = 28, float border = 0.f,
+    ccColor4F borderColor = { 0, 0, 0, 0 }) {
+    std::vector<CCPoint> pts;
+    for (int i = 0; i < segments; ++i) {
+        float a = i * 2.f * 3.14159265f / segments;
+        pts.push_back({ c.x + r * std::cos(a), c.y + r * std::sin(a) });
+    }
+    d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
+}
+
+// a rounded rectangle (convex, so one polygon)
+static void roundRect(CCDrawNode* d, CCRect r, float rad, ccColor4F fill, float border = 0.f, ccColor4F borderColor = { 0, 0, 0, 0 }) {
+    rad = std::min({ rad, r.size.width / 2.f, r.size.height / 2.f });
+    std::vector<CCPoint> pts;
+    CCPoint centers[] = { { r.getMaxX() - rad, r.getMaxY() - rad }, { r.getMinX() + rad, r.getMaxY() - rad },
+        { r.getMinX() + rad, r.getMinY() + rad }, { r.getMaxX() - rad, r.getMinY() + rad } };
+    for (int c = 0; c < 4; ++c) {
+        for (int i = 0; i <= 6; ++i) {
+            float a = (c * 90.f + i * 15.f) * 3.14159265f / 180.f;
+            CCPoint p { centers[c].x + rad * std::cos(a), centers[c].y + rad * std::sin(a) };
+            // no repeated points where corners meet: a zero-length edge draws a stray line
+            if (pts.empty() || ccpDistance(pts.back(), p) > 0.05f) {
+                pts.push_back(p);
+            }
+        }
+    }
+    while (pts.size() > 2 && ccpDistance(pts.back(), pts.front()) <= 0.05f) {
+        pts.pop_back();
+    }
+    d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
+}
+
+// the bundled Exo 2 font (OFL) for everything
+static char const* font() {
+    return "exo2.fnt"_spr;
+}
+}
+
 // v3.0 menu: a clean dark window. A header with the mouse icon and a live status pill, a
 // sidebar of tabs (Buffer, Prediction, Modes, Frames, Tools) and pages made of tiles you can
 // tap anywhere to switch. Drag it by the header. Opens with the menu key or Right Shift in a
@@ -4997,52 +5047,6 @@ private:
     static constexpr int TPS_MIN = 240;
     static constexpr int TPS_MAX = 1000;
 
-    // CCDrawNode blends premultiplied colours: a see-through colour has to be darkened by its alpha
-    static ccColor4F col(ccColor3B c, float a) {
-        return { c.r / 255.f * a, c.g / 255.f * a, c.b / 255.f * a, a };
-    }
-
-    static ccColor4F white(float a) {
-        return col({ 255, 255, 255 }, a);
-    }
-
-    // a filled circle as a polygon (the game's drawDot draws squares)
-    static void circle(CCDrawNode* d, CCPoint c, float r, ccColor4F fill, int segments = 28, float border = 0.f,
-        ccColor4F borderColor = { 0, 0, 0, 0 }) {
-        std::vector<CCPoint> pts;
-        for (int i = 0; i < segments; ++i) {
-            float a = i * 2.f * 3.14159265f / segments;
-            pts.push_back({ c.x + r * std::cos(a), c.y + r * std::sin(a) });
-        }
-        d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
-    }
-
-    // a rounded rectangle (convex, so one polygon)
-    static void roundRect(CCDrawNode* d, CCRect r, float rad, ccColor4F fill, float border = 0.f, ccColor4F borderColor = { 0, 0, 0, 0 }) {
-        rad = std::min({ rad, r.size.width / 2.f, r.size.height / 2.f });
-        std::vector<CCPoint> pts;
-        CCPoint centers[] = { { r.getMaxX() - rad, r.getMaxY() - rad }, { r.getMinX() + rad, r.getMaxY() - rad },
-            { r.getMinX() + rad, r.getMinY() + rad }, { r.getMaxX() - rad, r.getMinY() + rad } };
-        for (int c = 0; c < 4; ++c) {
-            for (int i = 0; i <= 6; ++i) {
-                float a = (c * 90.f + i * 15.f) * 3.14159265f / 180.f;
-                CCPoint p { centers[c].x + rad * std::cos(a), centers[c].y + rad * std::sin(a) };
-                // no repeated points where corners meet: a zero-length edge draws a stray line
-                if (pts.empty() || ccpDistance(pts.back(), p) > 0.05f) {
-                    pts.push_back(p);
-                }
-            }
-        }
-        while (pts.size() > 2 && ccpDistance(pts.back(), pts.front()) <= 0.05f) {
-            pts.pop_back();
-        }
-        d->drawPolygon(pts.data(), static_cast<unsigned>(pts.size()), fill, border, borderColor);
-    }
-
-    // the bundled Exo 2 font (OFL) for everything
-    static char const* font() {
-        return "exo2.fnt"_spr;
-    }
 
     CCLabelBMFont* label(CCNode* parent, std::string const& str, float scale, ccColor3B color, CCPoint at, CCPoint anchor = { 0.5f, 0.5f }) {
         auto* l = CCLabelBMFont::create(str.c_str(), font());
