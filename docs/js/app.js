@@ -366,7 +366,9 @@
     };
     tabs.forEach((b) => b.addEventListener("click", () => showOs(b.dataset.os)));
     const ua = navigator.userAgent;
-    showOs(/Android/i.test(ua) ? "android" : /Macintosh|Mac OS X/i.test(ua) ? "mac" : "win");
+    // iPads say they are Macs, but Macs have no touch screen
+    const ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+    showOs(/Android/i.test(ua) ? "android" : ios ? "ios" : /Macintosh|Mac OS X/i.test(ua) ? "mac" : "win");
 
     // light up the section you're reading in the top bar
     if ("IntersectionObserver" in window) {

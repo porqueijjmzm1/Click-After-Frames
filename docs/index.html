@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kosmos · early clicks, right on time</title>
-  <meta name="description" content="Kosmos is a Geode mod for Geometry Dash: an input buffer that predicts your path, so a click made a little too early lands on the right tick. Nine animated menu themes, auto update, Windows, Android and macOS.">
+  <meta name="description" content="Kosmos is a Geode mod for Geometry Dash: an input buffer that predicts your path, so a click made a little too early lands on the right tick. Nine animated menu themes, auto update, Windows, Android, iOS and macOS.">
   <meta name="theme-color" content="#0b0c1a">
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Kosmos">
   <meta property="og:title" content="Kosmos · early clicks, right on time">
-  <meta property="og:description" content="A Geode mod for Geometry Dash that holds a too-early click until the tick where it works. Animated themes, auto update, Windows / Android / macOS.">
+  <meta property="og:description" content="A Geode mod for Geometry Dash that holds a too-early click until the tick where it works. Animated themes, auto update, Windows / Android / iOS / macOS.">
   <meta property="og:url" content="https://porqueijjmzm1.github.io/Kosmos/">
   <meta property="og:image" content="https://porqueijjmzm1.github.io/Kosmos/assets/og.png">
   <meta property="og:image:width" content="1200">
@@ -66,7 +66,7 @@
         <ul class="facts">
           <li>Geometry Dash <b>2.2081</b></li>
           <li>Geode <b>5.11</b></li>
-          <li>Windows · Android · macOS</li>
+          <li>Windows · Android · iOS · macOS</li>
           <li>Free and open source</li>
         </ul>
       </div>
@@ -190,13 +190,14 @@
           </li>
           <li>
             <h3>Download Kosmos</h3>
-            <p><a data-download href="https://github.com/porqueijjmzm1/Kosmos/releases/latest/download/Kosmos.geode">Kosmos.geode</a>: one file for Windows, Android and macOS.</p>
+            <p><a data-download href="https://github.com/porqueijjmzm1/Kosmos/releases/latest/download/Kosmos.geode">Kosmos.geode</a>: one file for Windows, Android, iOS and macOS.</p>
           </li>
           <li>
             <h3>Put it in the mods folder</h3>
             <div class="tabs" role="tablist" aria-label="Your platform">
               <button role="tab" aria-selected="true" data-os="win">Windows</button>
               <button role="tab" aria-selected="false" data-os="android">Android</button>
+              <button role="tab" aria-selected="false" data-os="ios">iOS</button>
               <button role="tab" aria-selected="false" data-os="mac">macOS</button>
             </div>
             <div class="os" data-os-panel="win">
@@ -206,6 +207,15 @@
             <div class="os" data-os-panel="android" hidden>
               <p>With a file manager, put the file in:</p>
               <code>Android/media/com.geode.launcher/game/geode/mods</code>
+            </div>
+            <div class="os" data-os-panel="ios" hidden>
+              <p>On iOS, Geode runs through the <a href="https://github.com/geode-sdk/ios-launcher/blob/main/INSTALL.md">Geode launcher</a> (mods fully work with JIT). Add the file with the launcher's web upload:</p>
+              <ol class="mini">
+                <li>In the launcher's settings, hold <i>iOS Launcher</i> (in About) for 3 seconds and tap <i>Yes</i> to turn on Developer Mode.</li>
+                <li>Turn on <i>Web Server</i> at the bottom of the settings, then restart the launcher.</li>
+                <li>On a computer on the same Wi-Fi, open this address and upload the file:</li>
+              </ol>
+              <code>http://&lt;your iPhone's IP&gt;:8080</code>
             </div>
             <div class="os" data-os-panel="mac" hidden>
               <p>In Finder, press <kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>G</kbd> and go to:</p>
@@ -297,7 +307,7 @@
         </details>
         <details>
           <summary>Does it work on phones?</summary>
-          <p>Yes, on Android. Without a keyboard, open the menu with the Saturn button on the main menu or in the pause menu.</p>
+          <p>Yes, on Android and iOS. Without a keyboard, open the menu with the Saturn button on the main menu or in the pause menu.</p>
         </details>
         <details>
           <summary>How do I change the theme?</summary>
