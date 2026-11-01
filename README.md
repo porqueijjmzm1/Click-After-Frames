@@ -1,6 +1,6 @@
 # Kosmos (Geode)
 
-Website: https://porqueijjmzm1.github.io/Click-After-Frames/ (the `docs/` folder, published by `.github/workflows/pages.yml`; the settings list there is made from `mod.json` by `scripts/site_settings.py`).
+Website: https://porqueijjmzm1.github.io/Kosmos/ (the `docs/` folder, published by `.github/workflows/pages.yml`; the settings list there is made from `mod.json` by `scripts/site_settings.py`).
 
 By timbodev, based on Click Before Frames by BASU.
 

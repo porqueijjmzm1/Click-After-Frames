@@ -7237,7 +7237,7 @@ namespace {
     // download it now, later (asked again next start) or skip that version. The download
     // shows its progress; the file is only installed if it really is this mod and newer, and
     // loads on the next start. Tools > Updates checks again by hand.
-    constexpr char const* UPDATE_REPO = "porqueijjmzm1/Click-After-Frames";
+    constexpr char const* UPDATE_REPO = "porqueijjmzm1/Kosmos";
 
     struct UpdateInfo {
         std::string version;  // "v3.3.0"

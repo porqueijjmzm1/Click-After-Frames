@@ -3,7 +3,7 @@
 (function () {
   "use strict";
 
-  const REPO = "porqueijjmzm1/Click-After-Frames";
+  const REPO = "porqueijjmzm1/Kosmos";
   // The Discord invite link. Put it here (like "https://discord.gg/abc123") and every Discord
   // button on the page shows up.
   const DISCORD_URL = "";
