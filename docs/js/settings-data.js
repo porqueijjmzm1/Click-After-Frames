@@ -1,11 +1,12 @@
 // made by scripts/site_settings.py from mod.json: run it again after changing settings
 window.KOSMOS_DATA = {
- "version": "v3.5.0",
+ "version": "v3.6.0",
  "geode": "5.11.2",
  "gd": {
   "win": "2.2081",
   "android": "2.2081",
-  "mac": "2.2081"
+  "mac": "2.2081",
+  "ios": "2.2081"
  },
  "groups": [
   {
