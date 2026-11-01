@@ -5,7 +5,7 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v3.2.0",
+	"version": "v3.3.0",
 	"id": "timbodev.input-buffer",
 	"name": "Input Buffer",
 	"developer": "timbodev",
@@ -302,8 +302,8 @@
 		},
 		"auto-update": {
 			"type": "bool",
-			"name": "Auto update",
-			"description": "On game start, check the mod's GitHub releases for a newer version. If there is one it's downloaded and installed in the background (only if it really is this mod and newer), and the main menu asks you to restart the game to use it.",
+			"name": "Check for updates",
+			"description": "On game start, check the mod's GitHub releases for a newer version. If there is one, the main menu shows what's new and you choose: download it, later, or skip that version. Tools > Updates checks by hand.",
 			"default": true
 		},
 		"hide-menu-buttons": {

@@ -1,6 +1,11 @@
-Instalação: coloque o InputBuffer.geode na pasta de mods do Geode e apague versões antigas (TESTEBUFFER.geode ou basu.input-buffer.geode), senão os dois rodam juntos. Quem já tem a v3.1.0 recebe esta versão sozinho pelo auto update.
+## What's new in v3.3.0
 
-Novidades da v3.2.0:
-- As configurações agora são salvas na hora: ao abrir o jogo, entrar e sair de uma fase, pausar, voltar ao menu principal, fechar o menu do mod e logo depois de mudar qualquer configuração. Antes elas só eram salvas quando o jogo fechava normalmente, então um crash ou o celular fechando o app fazia perder as mudanças.
+- **Update window**: when a new version is out, the main menu shows a window in the menu's style with what's new, and you choose: **Download**, **Later** or **Skip version**. The download shows its progress, then offers a restart.
+- **Tools > Updates**: check for a new version by hand (it also shows a skipped version again).
+- The "Auto update" setting is now **Check for updates**: nothing is downloaded without asking.
 
-Baseado no Click Before Frames, do BASU.
+## Install
+
+Put InputBuffer.geode in your Geode mods folder and remove older copies (TESTEBUFFER.geode or basu.input-buffer.geode), or both run at once.
+
+Based on Click Before Frames by BASU.

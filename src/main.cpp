@@ -17,6 +17,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/utils/web.hpp>
+#include <Geode/ui/MDTextArea.hpp>
 #include <Geode/modify/EffectGameObject.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/GameObject.hpp>
@@ -4897,6 +4898,8 @@ static void roundRect(CCDrawNode* d, CCRect r, float rad, ccColor4F fill, float 
 static char const* font() {
     return "exo2.fnt"_spr;
 }
+
+void checkForUpdate(bool manual);  // v3.3, with the update window
 }
 
 // v3.0 menu: a clean dark window. A header with the mouse icon and a live status pill, a
@@ -4941,7 +4944,7 @@ class BufferMenu : public geode::Popup {
         { "explain-inputs", "Explain inputs" },
         { "remove-watermark", "Remove watermark" },
         { "hide-menu-buttons", "Hide menu buttons" },
-        { "auto-update", "Auto update" },
+        { "auto-update", "Update check" },
     };
     static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Frames", "Tools", "Themes" };
     static constexpr char const* TAB_INFO[] = {
@@ -5432,11 +5435,12 @@ private:
     void pageTools() {
         heading();
         optionGrid(TOOLS, std::size(TOOLS), H - HEADER - 60.f);
-        char const* names[] = { "Stats", "Console", "Copy log", "Forget level", "Settings" };
+        char const* names[] = { "Stats", "Console", "Copy log", "Forget level", "Settings", "Updates" };
         SEL_MenuHandler handlers[] = { menu_selector(BufferMenu::onStats), menu_selector(BufferMenu::onConsole),  // phones have no F9
-            menu_selector(BufferMenu::onCopyLog), menu_selector(BufferMenu::onForget), menu_selector(BufferMenu::onAllSettings) };
-        float bw = (CW - 4.f * 5.f) / 5.f;
-        for (int i = 0; i < 5; ++i) {
+            menu_selector(BufferMenu::onCopyLog), menu_selector(BufferMenu::onForget), menu_selector(BufferMenu::onAllSettings),
+            menu_selector(BufferMenu::onUpdates) };
+        float bw = (CW - 5.f * 5.f) / 6.f;
+        for (int i = 0; i < 6; ++i) {
             button(m_pageMenu, names[i], handlers[i], { L + bw / 2.f + i * (bw + 5.f), 30.f }, bw);
         }
     }
@@ -5713,6 +5717,12 @@ private:
 
     void onAllSettings(CCObject*) {
         geode::openSettingsPopup(Mod::get());
+    }
+
+    // v3.3: checks GitHub now and opens the update window if there's a newer version
+    void onUpdates(CCObject*) {
+        say("update: checking...");
+        checkForUpdate(true);
     }
 
     void onCopyLog(CCObject*) {
@@ -6640,13 +6650,76 @@ namespace {
         }
     }
 
-    // v3.1 auto update: once per game start, in the background, the latest GitHub release of
-    // the mod is checked (pre-releases like the "teste" builds are skipped). A newer one is
-    // downloaded and put in place of this mod's file, but only if it really is this mod and a
-    // newer version; it loads on the next start. The main menu then offers a restart.
+    // v3.3 updates: once per game start, in the background, the latest GitHub release of the
+    // mod is checked (pre-releases like the "teste" builds are skipped). If it's newer, the
+    // main menu shows the update window: what's new (the release notes) and your choice to
+    // download it now, later (asked again next start) or skip that version. The download
+    // shows its progress; the file is only installed if it really is this mod and newer, and
+    // loads on the next start. Tools > Updates checks again by hand.
     constexpr char const* UPDATE_REPO = "porqueijjmzm1/Click-After-Frames";
-    bool updateChecked = false;
-    std::string updateInstalled;  // the version installed, waiting to be shown on the main menu
+
+    struct UpdateInfo {
+        std::string version;  // "v3.3.0"
+        std::string notes;    // the release notes (markdown)
+        std::string url;      // the .geode to download
+    };
+    UpdateInfo pendingUpdate;
+    bool updateReady = false;    // pendingUpdate holds a newer release
+    bool updateChecked = false;  // the start-of-game check ran
+    bool updateShown = false;    // the window was shown on the main menu this session
+
+    enum class Download { Idle, Running, Installed, Failed };
+    Download downloadState = Download::Idle;
+    float downloadPercent = -1.f;  // -1 while the size isn't known yet
+    std::string downloadError;
+
+    // The fonts only have plain ASCII: accented letters become their plain ones, dashes,
+    // quotes and arrows their ASCII look-alikes, anything else is left out.
+    std::string plainText(std::string const& in) {
+        static constexpr char const* LATIN = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYPsaaaaaaaceeeeiiiidnooooo/ouuuuypy";
+        std::string out;
+        out.reserve(in.size());
+        for (size_t i = 0; i < in.size(); ++i) {
+            auto c = static_cast<unsigned char>(in[i]);
+            if (c < 0x80) {
+                if (c != '\r') {
+                    out += static_cast<char>(c);
+                }
+                continue;
+            }
+            if (c == 0xC3 && i + 1 < in.size()) {
+                auto n = static_cast<unsigned char>(in[i + 1]);
+                if (n >= 0x80 && n <= 0xBF) {
+                    out += LATIN[n - 0x80];
+                }
+                ++i;
+                continue;
+            }
+            if (c == 0xE2 && i + 2 < in.size()) {
+                auto a = static_cast<unsigned char>(in[i + 1]);
+                auto b = static_cast<unsigned char>(in[i + 2]);
+                if (a == 0x80 && (b == 0x93 || b == 0x94 || b == 0xA2)) {
+                    out += '-';  // dashes and bullets
+                }
+                else if (a == 0x80 && (b == 0x98 || b == 0x99)) {
+                    out += '\'';
+                }
+                else if (a == 0x80 && (b == 0x9C || b == 0x9D)) {
+                    out += '"';
+                }
+                else if (a == 0x80 && b == 0xA6) {
+                    out += "...";
+                }
+                else if (a == 0x86 && b == 0x92) {
+                    out += "->";
+                }
+                i += 2;
+                continue;
+            }
+            i += c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
+        }
+        return out;
+    }
 
     Result<VersionInfo> packageVersion(ByteVector const& data) {
         GEODE_UNWRAP_INTO(auto unzip, file::Unzip::create(ByteSpan(data)));
@@ -6663,31 +6736,372 @@ namespace {
         return VersionInfo::parse(version);
     }
 
-    void showUpdatePopup() {
-        auto* scene = CCScene::get();
-        if (updateInstalled.empty() || !scene || !scene->getChildByID("MenuLayer")) {
+    // downloads pendingUpdate in the background; the window follows downloadState
+    void startDownload() {
+        if (downloadState == Download::Running || pendingUpdate.url.empty()) {
             return;
         }
-        auto version = std::move(updateInstalled);
-        updateInstalled.clear();
-        createQuickPopup("Input Buffer updated",
-            fmt::format("<cg>{}</c> is installed (you were on {}).\nRestart the game to use it.", version,
-                Mod::get()->getVersion().toVString()),
-            "Later", "Restart", [](FLAlertLayer*, bool restart) {
-                if (restart) {
-                    game::restart(true);
-                }
+        downloadState = Download::Running;
+        downloadPercent = -1.f;
+        downloadError.clear();
+        say("update: downloading {}", pendingUpdate.version);
+        std::string url = pendingUpdate.url;
+        std::thread([url] {
+            auto fail = [](std::string why) {
+                queueInMainThread([why] {
+                    say("update: {}", why);
+                    downloadError = why;
+                    downloadState = Download::Failed;
+                });
+            };
+            auto file = web::WebRequest()
+                .timeout(std::chrono::seconds(120))
+                .userAgent("InputBuffer")
+                .followRedirects(true)
+                .onProgress([](web::WebProgress const& progress) {
+                    if (auto percent = progress.downloadProgress()) {
+                        downloadPercent = *percent;
+                    }
+                })
+                .getSync(url);
+            if (!file.ok()) {
+                return fail(fmt::format("The download failed (error {}).", file.code()));
+            }
+            auto data = std::move(file).data();
+            auto version = packageVersion(data);
+            if (version.isErr()) {
+                return fail("The download isn't a valid Input Buffer build.");
+            }
+            auto newVersion = version.unwrap();
+            if (!(newVersion > Mod::get()->getVersion())) {
+                return fail(fmt::format("The download is {}, which isn't newer.", newVersion.toVString()));
+            }
+            if (file::writeBinarySafe(Mod::get()->getPackagePath(), ByteSpan(data)).isErr()) {
+                return fail("Couldn't write the new file into the mods folder.");
+            }
+            std::string done = newVersion.toVString();
+            queueInMainThread([done] {
+                say("update: {} installed, restart the game to use it", done);
+                downloadPercent = 100.f;
+                downloadState = Download::Installed;
             });
+        }).detach();
     }
 
-    void checkForUpdate() {
-        if (updateChecked || !Mod::get()->getSettingValue<bool>("auto-update")) {
+    // The update window, in the menu's style: a header with the versions, what's new in a
+    // scrolling box, and the choice at the bottom (then the download's progress, and a
+    // restart once it's installed).
+    class UpdateWindow : public geode::Popup {
+        static constexpr float W = 360.f;
+        static constexpr float H = 250.f;
+        static constexpr float HEADER = 36.f;
+
+        static inline UpdateWindow* s_open = nullptr;
+
+        ccColor3B m_main {};
+        ccColor3B m_soft {};
+        ccColor3B m_text { 236, 239, 245 };
+        ccColor3B m_muted { 140, 148, 168 };
+        ccColor3B m_dim { 96, 103, 122 };
+        ccColor3B m_good { 80, 222, 140 };
+        ccColor3B m_bad { 240, 92, 104 };
+
+        CCNode* m_footer = nullptr;
+        CCMenu* m_actions = nullptr;
+        CCDrawNode* m_bar = nullptr;
+        CCLabelBMFont* m_status = nullptr;
+        CCMenuItemSpriteExtra* m_close = nullptr;
+        Download m_shown = Download::Idle;
+        float m_time = 0.f;
+
+        CCLabelBMFont* label(CCNode* parent, std::string const& str, float scale, ccColor3B color, CCPoint at,
+            CCPoint anchor = { 0.5f, 0.5f }) {
+            auto* l = CCLabelBMFont::create(str.c_str(), font());
+            l->setScale(scale);
+            l->setColor(color);
+            l->setAnchorPoint(anchor);
+            l->setPosition(at);
+            parent->addChild(l, 3);
+            return l;
+        }
+
+        CCMenuItemSpriteExtra* button(std::string const& str, SEL_MenuHandler handler, CCPoint center, float width, bool primary) {
+            float height = 22.f;
+            auto* node = CCNode::create();
+            node->setContentSize({ width, height });
+            auto* d = CCDrawNode::create();
+            if (primary) {
+                roundRect(d, { 0.f, 0.f, width, height }, 6.f, col(m_main, 1.f));
+            }
+            else {
+                roundRect(d, { 0.f, 0.f, width, height }, 6.f, white(0.06f), 0.5f, white(0.1f));
+            }
+            node->addChild(d);
+            auto* l = CCLabelBMFont::create(str.c_str(), font());
+            l->setColor(primary ? ccColor3B { 255, 255, 255 } : m_text);
+            l->setPosition({ width / 2.f, height / 2.f + 0.5f });
+            l->limitLabelWidth(width - 10.f, 0.48f, 0.2f);
+            node->addChild(l);
+            auto* item = CCMenuItemSpriteExtra::create(node, this, handler);
+            item->m_scaleMultiplier = 1.05f;
+            item->setPosition(center);
+            m_actions->addChild(item);
+            return item;
+        }
+
+        void buildFrame() {
+            auto* d = CCDrawNode::create();
+            for (int i = 6; i >= 1; --i) {
+                float g = i * 1.6f;
+                roundRect(d, { -g, -g - 2.f, W + 2.f * g, H + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
+            }
+            roundRect(d, { 0.f, 0.f, W, H }, 12.f, col({ 15, 17, 23 }, 0.98f), 0.6f, white(0.09f));
+            roundRect(d, { 0.f, H - HEADER - 1.f, W, HEADER + 1.f }, 12.f, white(0.02f));
+            d->drawSegment({ 1.f, H - HEADER }, { W - 1.f, H - HEADER }, 0.4f, white(0.07f));
+            float cy = H - HEADER / 2.f;
+            roundRect(d, { 10.f, cy - 11.f, 22.f, 22.f }, 6.f, col(m_main, 0.2f), 0.6f, col(m_main, 0.7f));
+            m_mainLayer->addChild(d, -1);
+            auto* line = CCLayerGradient::create({ m_main.r, m_main.g, m_main.b, 220 }, { m_main.r, m_main.g, m_main.b, 0 }, { 1.f, 0.f });
+            line->setContentSize({ W * 0.6f, 1.f });
+            line->setPosition({ 12.f, H - HEADER - 0.5f });
+            m_mainLayer->addChild(line, 0);
+            if (auto* mouse = CCSprite::create("mouse.png"_spr)) {
+                mouse->setScale(15.f / mouse->getContentSize().height);
+                mouse->setColor(m_soft);
+                mouse->setPosition({ 21.f, cy });
+                m_mainLayer->addChild(mouse, 2);
+            }
+            label(m_mainLayer, "Update available", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
+            label(m_mainLayer, "Input Buffer", 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
+
+            // the versions: the one you have > the new one
+            auto* pillText = label(m_mainLayer, fmt::format("{}  >  {}", Mod::get()->getVersion().toVString(), pendingUpdate.version), 0.42f,
+                m_soft, { 0.f, cy + 0.5f });
+            pillText->limitLabelWidth(120.f, 0.42f, 0.2f);
+            float pw = pillText->getScaledContentSize().width + 18.f;
+            float right = W - 40.f;
+            pillText->setPosition({ right - pw / 2.f, cy + 0.5f });
+            auto* pill = CCDrawNode::create();
+            roundRect(pill, { right - pw, cy - 9.f, pw, 18.f }, 9.f, col(m_main, 0.14f), 0.5f, col(m_main, 0.55f));
+            m_mainLayer->addChild(pill, 2);
+
+            auto* frameMenu = CCMenu::create();
+            frameMenu->setPosition({ 0.f, 0.f });
+            m_mainLayer->addChild(frameMenu, 5);
+            auto* node = CCNode::create();
+            node->setContentSize({ 20.f, 20.f });
+            auto* x = CCDrawNode::create();
+            roundRect(x, { 0.f, 0.f, 20.f, 20.f }, 6.f, white(0.05f), 0.5f, white(0.1f));
+            x->drawSegment({ 7.f, 7.f }, { 13.f, 13.f }, 0.6f, col(m_text, 0.9f));
+            x->drawSegment({ 7.f, 13.f }, { 13.f, 7.f }, 0.6f, col(m_text, 0.9f));
+            node->addChild(x);
+            m_close = CCMenuItemSpriteExtra::create(node, this, menu_selector(UpdateWindow::onLater));
+            m_close->setPosition({ W - 22.f, cy });
+            frameMenu->addChild(m_close);
+
+            // what's new
+            label(m_mainLayer, "WHAT'S NEW", 0.3f, m_dim, { 14.f, H - HEADER - 14.f }, { 0.f, 0.5f });
+            std::string notes = plainText(pendingUpdate.notes);
+            if (notes.find_first_not_of(" \n\t") == std::string::npos) {
+                notes = "No notes for this version.";
+            }
+            float top = H - HEADER - 24.f, bottom = 52.f;
+            auto* text = MDTextArea::create(notes, { W - 28.f, top - bottom });
+            text->setPosition({ W / 2.f, (top + bottom) / 2.f });
+            m_mainLayer->addChild(text, 2);
+        }
+
+        // the bottom row for the download's state
+        void buildFooter() {
+            if (m_footer) {
+                m_footer->removeFromParent();
+            }
+            m_footer = CCNode::create();
+            m_mainLayer->addChild(m_footer, 4);
+            m_actions = CCMenu::create();
+            m_actions->setPosition({ 0.f, 0.f });
+            m_footer->addChild(m_actions, 5);
+            m_bar = nullptr;
+            m_status = nullptr;
+            m_shown = downloadState;
+            float y = 28.f;
+            switch (downloadState) {
+                case Download::Idle:
+                    button("Skip version", menu_selector(UpdateWindow::onSkip), { 14.f + 46.f, y }, 92.f, false);
+                    button("Later", menu_selector(UpdateWindow::onLater), { W - 14.f - 110.f - 6.f - 36.f, y }, 72.f, false);
+                    button("Download", menu_selector(UpdateWindow::onDownload), { W - 14.f - 55.f, y }, 110.f, true);
+                    break;
+                case Download::Running:
+                    m_bar = CCDrawNode::create();
+                    m_footer->addChild(m_bar, 2);
+                    m_status = label(m_footer, "", 0.38f, m_muted, { 14.f, y - 10.f }, { 0.f, 0.5f });
+                    drawProgress();
+                    break;
+                case Download::Installed:
+                    m_status = label(m_footer, fmt::format("{} is installed. Restart the game to use it.", pendingUpdate.version), 0.4f,
+                        m_good, { 14.f, y }, { 0.f, 0.5f });
+                    m_status->limitLabelWidth(W - 28.f - 190.f, 0.4f, 0.2f);
+                    button("Later", menu_selector(UpdateWindow::onLater), { W - 14.f - 110.f - 6.f - 36.f, y }, 72.f, false);
+                    button("Restart now", menu_selector(UpdateWindow::onRestart), { W - 14.f - 55.f, y }, 110.f, true);
+                    break;
+                case Download::Failed:
+                    m_status = label(m_footer, downloadError, 0.38f, m_bad, { 14.f, y }, { 0.f, 0.5f });
+                    m_status->limitLabelWidth(W - 28.f - 190.f, 0.38f, 0.2f);
+                    button("Close", menu_selector(UpdateWindow::onLater), { W - 14.f - 110.f - 6.f - 36.f, y }, 72.f, false);
+                    button("Retry", menu_selector(UpdateWindow::onDownload), { W - 14.f - 55.f, y }, 110.f, true);
+                    break;
+            }
+            // no closing while the file is being downloaded
+            if (m_close) {
+                m_close->setVisible(downloadState != Download::Running);
+                m_close->setEnabled(downloadState != Download::Running);
+            }
+            handleTouchPriority(this);
+        }
+
+        // the progress bar: filled to the percentage, or a light sliding along while the size
+        // isn't known yet
+        void drawProgress() {
+            if (!m_bar) {
+                return;
+            }
+            float x0 = 14.f, x1 = W - 14.f, y = 34.f, h = 6.f;
+            m_bar->clear();
+            roundRect(m_bar, { x0, y - h / 2.f, x1 - x0, h }, h / 2.f, white(0.08f));
+            if (downloadPercent >= 0.f) {
+                float w = (x1 - x0) * std::clamp(downloadPercent / 100.f, 0.f, 1.f);
+                if (w > 1.f) {
+                    roundRect(m_bar, { x0, y - h / 2.f, std::max(w, h), h }, h / 2.f, col(m_main, 1.f));
+                }
+            }
+            else {
+                float span = (x1 - x0) * 0.25f;
+                float t = std::fmod(m_time * 0.6f, 1.f);
+                float a = x0 + (x1 - x0 - span) * t;
+                roundRect(m_bar, { a, y - h / 2.f, span, h }, h / 2.f, col(m_main, 0.9f));
+            }
+            if (m_status) {
+                m_status->setString(downloadPercent >= 0.f ? fmt::format("Downloading {}...  {:.0f}%", pendingUpdate.version, downloadPercent).c_str()
+                                                          : fmt::format("Downloading {}...", pendingUpdate.version).c_str());
+            }
+        }
+
+        void update(float dt) override {
+            m_time += dt;
+            if (downloadState != m_shown) {
+                buildFooter();
+            }
+            if (downloadState == Download::Running) {
+                drawProgress();
+            }
+        }
+
+        void onDownload(CCObject*) {
+            startDownload();
+            buildFooter();
+        }
+
+        void onLater(CCObject*) {
+            keyBackClicked();
+        }
+
+        void onSkip(CCObject*) {
+            Mod::get()->setSavedValue<std::string>("skipped-update", pendingUpdate.version);
+            queueSave();
+            say("update: {} skipped (Tools > Updates shows it again)", pendingUpdate.version);
+            keyBackClicked();
+        }
+
+        void onRestart(CCObject*) {
+            game::restart(true);
+        }
+
+    protected:
+        bool init() {
+            if (!Popup::init(W, H, "GJ_square04.png")) {
+                return false;
+            }
+            m_bgSprite->setVisible(false);
+            if (m_closeBtn) {
+                m_closeBtn->setVisible(false);
+                m_closeBtn->setEnabled(false);
+            }
+            this->setOpacity(140);
+            auto theme = BufferMenu::currentTheme();
+            m_main = theme.main;
+            m_soft = theme.soft;
+            s_open = this;
+            buildFrame();
+            buildFooter();
+            this->scheduleUpdate();
+            return true;
+        }
+
+    public:
+        ~UpdateWindow() override {
+            if (s_open == this) {
+                s_open = nullptr;
+            }
+        }
+
+        // Esc / back does nothing while the file is being downloaded
+        void keyBackClicked() override {
+            if (downloadState == Download::Running) {
+                return;
+            }
+            Popup::keyBackClicked();
+        }
+
+        static bool isOpen() {
+            return s_open != nullptr;
+        }
+
+        static void open() {
+            if (s_open) {
+                return;
+            }
+            auto* ret = new UpdateWindow();
+            if (ret->init()) {
+                ret->autorelease();
+                ret->show();
+                return;
+            }
+            delete ret;
+        }
+    };
+
+    // on the main menu once per game start; anywhere when you asked (Tools > Updates)
+    void showUpdateWindow(bool anywhere) {
+        auto* scene = CCScene::get();
+        if (!updateReady || UpdateWindow::isOpen() || !scene) {
+            return;
+        }
+        if (!anywhere && (updateShown || !scene->getChildByID("MenuLayer"))) {
+            return;
+        }
+        updateShown = true;
+        UpdateWindow::open();
+    }
+
+    // `manual`: asked from Tools > Updates, so the answer is shown even when there's nothing new,
+    // a skipped version is shown again, and it runs even with the setting off
+    void checkForUpdate(bool manual) {
+        if (!manual && (updateChecked || !Mod::get()->getSettingValue<bool>("auto-update"))) {
             return;
         }
         updateChecked = true;
-        std::thread([] {
-            auto note = [](std::string text) {
-                queueInMainThread([text] { say("update: {}", text); });
+        if (manual && updateReady) {
+            showUpdateWindow(true);
+            return;
+        }
+        std::thread([manual] {
+            auto note = [manual](std::string text) {
+                queueInMainThread([text, manual] {
+                    say("update: {}", text);
+                    if (manual) {
+                        FLAlertLayer::create("Input Buffer", text, "OK")->show();
+                    }
+                });
             };
             auto res = web::WebRequest()
                 .timeout(std::chrono::seconds(15))
@@ -6695,22 +7109,22 @@ namespace {
                 .header("Accept", "application/vnd.github+json")
                 .getSync(fmt::format("https://api.github.com/repos/{}/releases/latest", UPDATE_REPO));
             if (res.code() == 404) {
-                return note("no public release to check (is the GitHub repo private?)");
+                return note("No public release to check (is the GitHub repo private?).");
             }
             if (!res.ok()) {
-                return note(fmt::format("couldn't reach GitHub (error {})", res.code()));
+                return note(fmt::format("Couldn't reach GitHub (error {}).", res.code()));
             }
             auto json = res.json();
             if (json.isErr()) {
-                return note("GitHub sent something unexpected");
+                return note("GitHub sent something unexpected.");
             }
             auto release = json.unwrap();
             auto latest = VersionInfo::parse(release["tag_name"].asString().unwrapOr(""));
             if (latest.isErr()) {
-                return note("the latest release has no version tag");
+                return note("The latest release has no version tag.");
             }
             if (!(latest.unwrap() > Mod::get()->getVersion())) {
-                return note(fmt::format("up to date ({} is the latest)", latest.unwrap().toVString()));
+                return note(fmt::format("You're on the latest version ({}).", Mod::get()->getVersion().toVString()));
             }
             std::string url;
             auto assets = release["assets"];
@@ -6724,33 +7138,18 @@ namespace {
                 }
             }
             if (url.empty()) {
-                return note(fmt::format("{} has no .geode file yet", latest.unwrap().toVString()));
+                return note(fmt::format("{} has no .geode file yet.", latest.unwrap().toVString()));
             }
-            auto file = web::WebRequest()
-                .timeout(std::chrono::seconds(120))
-                .userAgent("InputBuffer")
-                .followRedirects(true)
-                .getSync(url);
-            if (!file.ok()) {
-                return note(fmt::format("the download failed (error {})", file.code()));
-            }
-            auto data = std::move(file).data();
-            auto version = packageVersion(data);
-            if (version.isErr()) {
-                return note("the download isn't a valid Input Buffer build, not installed");
-            }
-            auto newVersion = version.unwrap();
-            if (!(newVersion > Mod::get()->getVersion())) {
-                return note(fmt::format("the download is {}, not newer, not installed", newVersion.toVString()));
-            }
-            if (file::writeBinarySafe(Mod::get()->getPackagePath(), ByteSpan(data)).isErr()) {
-                return note("couldn't write the new file into the mods folder");
-            }
-            std::string done = newVersion.toVString();
-            queueInMainThread([done] {
-                say("update: {} installed, restart the game to use it", done);
-                updateInstalled = done;
-                showUpdatePopup();
+            UpdateInfo info { latest.unwrap().toVString(), release["body"].asString().unwrapOr(""), url };
+            queueInMainThread([info, manual] {
+                pendingUpdate = info;
+                updateReady = true;
+                if (!manual && Mod::get()->getSavedValue<std::string>("skipped-update", "") == info.version) {
+                    say("update: {} is out (skipped; Tools > Updates shows it)", info.version);
+                    return;
+                }
+                say("update: {} is out", info.version);
+                showUpdateWindow(manual);
             });
         }).detach();
     }
@@ -6790,10 +7189,8 @@ class $modify(BufMenuLayer, MenuLayer) {
             bottom->updateLayout();
         }
         saveNow();  // v3.2: back on the main menu (and the game's start)
-        checkForUpdate();
-        if (!updateInstalled.empty()) {
-            queueInMainThread([] { showUpdatePopup(); });
-        }
+        checkForUpdate(false);
+        queueInMainThread([] { showUpdateWindow(false); });
         return true;
     }
 

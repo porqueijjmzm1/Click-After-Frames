@@ -74,5 +74,5 @@ jobs:
             cp "$file" TESTEBUFFER.geode
             gh release delete teste --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
             gh release create teste TESTEBUFFER.geode --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --prerelease --latest=false --title "TESTEBUFFER" --notes "Build de teste do commit $GITHUB_SHA"
+              --prerelease --latest=false --title "TESTEBUFFER" --notes "Test build of commit $GITHUB_SHA"
           fi
