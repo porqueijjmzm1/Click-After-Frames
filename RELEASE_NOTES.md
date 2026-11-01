@@ -1,14 +1,18 @@
-## What's new in v3.4.0
+## What's new in v3.5.0
 
-- **Input Buffer is now Kosmos**, with a white **Saturn** logo and a Saturn button on the main and pause menus. Your settings and updates carry over.
-- **New themes**: each one changes the whole window, not just a colour. A gradient, art drawn behind the menu, two accent colours and tinted text.
-  - **Deep space**: Kosmos (starfield), Nebula (clouds), Void (minimal orbit)
-  - **Planets**: Saturn (ringed planet), Mars (dust storm), Neptune (rising planet)
-  - **Phenomena**: Aurora (light curtains), Supernova (burst of rays), Comet (long tails)
-- The **Themes tab** is sorted into these groups, and every card shows a small preview of the window in that theme.
-- The update window follows your theme too.
+Every theme is now **animated**, in the menu and in the update window:
 
-The old themes (Blue, Purple, ...) are gone; if you had one picked, the menu starts in Kosmos.
+- **Kosmos**: the starfield drifts slowly, stars twinkle and shooting stars fly by.
+- **Nebula**: the clouds wander and swell.
+- **Void**: the little moon goes round its orbit, leaving a trail.
+- **Saturn**: a light runs round the ring and a moon circles the planet, passing behind it.
+- **Mars**: the dust blows in the wind and the moons drift.
+- **Neptune**: the planet's bands sway, its glow pulses and a moon crosses the sky.
+- **Aurora**: the curtains of light wave and change colour.
+- **Supernova**: the rays turn and pulse, with shock waves going out from the core.
+- **Comet**: comets fall across the window with long tails.
+
+The small previews in the **Themes** tab move too, so you can see each one before you pick it.
 
 ## Install
 

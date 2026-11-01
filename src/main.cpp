@@ -5057,24 +5057,49 @@ static void sparkle(CCDrawNode* d, CCPoint c, float r, ccColor4F color) {
     d->drawPolygon(across, 4, color, 0.f, { 0, 0, 0, 0 });
 }
 
-// The theme's art in the rectangle r (the window, or a card's preview), cut to `clip`. Sizes
-// go with the height and the big pieces sit from the right edge, so a wide preview is the
-// window scaled down.
-static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CCPoint> const& clip, bool mini) {
+// a number from 0 to 1 that looks random, made from a whole number
+static float hash01(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return static_cast<float>(x >> 8) / 16777216.f;
+}
+
+// The theme's art in the rectangle r (the window, or a card's preview), cut to `clip`, as it
+// is `time` seconds in. Sizes go with the height and the big pieces sit from the right edge,
+// so a wide preview is the window scaled down. v3.5: everything moves: stars drift, glows
+// breathe and wander, comets fall, the aurora waves, moons go round.
+static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CCPoint> const& clip, bool mini, float time) {
+    constexpr float TAU = 6.2831853f;
     float w = r.size.width, h = r.size.height;
     auto at = [&](float u, float v) { return CCPoint { r.getMinX() + u * w, r.getMinY() + v * h }; };
     auto fromRight = [&](float x, float v) { return CCPoint { r.getMaxX() - x * h, r.getMinY() + v * h }; };
     auto bgAt = [&](float v) { return mixColor(t.bottom, t.top, std::clamp(v, 0.f, 1.f)); };
+    auto wave = [&](float speed, float phase) { return std::sin(time * speed + phase); };
+    // a slow wander around p (amount in heights)
+    auto wander = [&](CCPoint p, float amount, float speed, float phase) {
+        return CCPoint { p.x + amount * h * std::sin(time * speed + phase), p.y + amount * h * 0.7f * std::cos(time * speed * 0.8f + phase) };
+    };
+    // fades things out near the left and right edges, where they wrap round
+    auto edgeFade = [](float u) { return std::clamp(std::min(u, 1.f - u) / 0.04f, 0.f, 1.f); };
     float dot = std::max(h / 276.f, 0.3f);  // small things don't vanish in the preview
     Dice dice { static_cast<uint32_t>(t.deco) * 7919u + 17u };
 
-    auto stars = [&](int count, float alpha) {
+    // stars drifting left (the big ones faster, `drift` heights a second) and twinkling
+    auto stars = [&](int count, float alpha, float drift) {
         int n = mini ? std::max(count / 3, 4) : count;
         for (int i = 0; i < n; ++i) {
-            float u = 0.03f + 0.94f * dice.next(), v = 0.05f + 0.88f * dice.next();
-            float k = dice.next();
-            ccColor3B c = mixColor({ 255, 255, 255 }, t.soft, dice.next() * 0.6f);
-            circle(d, at(u, v), (0.5f + 1.3f * k * k) * dot, col(c, alpha * (0.35f + 0.65f * dice.next())), 8);
+            float u0 = dice.next(), v = 0.05f + 0.88f * dice.next();
+            float k = dice.next(), shade = dice.next(), bright = dice.next();
+            float phase = dice.next() * TAU, rate = 0.6f + 1.6f * dice.next();
+            float u = u0 - time * drift * (0.35f + 0.65f * k) * h / w;
+            u -= std::floor(u);
+            float a = alpha * (0.35f + 0.65f * bright) * (0.7f + 0.3f * std::sin(time * rate + phase)) * edgeFade(u);
+            if (a > 0.004f) {
+                circle(d, at(u, v), (0.5f + 1.3f * k * k) * dot, col(mixColor({ 255, 255, 255 }, t.soft, shade * 0.6f), a), 8);
+            }
         }
     };
     // a soft round glow: rings that add up towards the middle
@@ -5084,9 +5109,10 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
             fillClipped(d, ellipsePoints(c, rad * k, rad * k, 0.f, 40), clip, col(color, alpha));
         }
     };
-    // a band along an ellipse between two angles, in pieces (an opaque colour, so the joins don't show)
+    // a band along an ellipse between two angles, in pieces (an opaque colour, so the joins
+    // don't show); the colour comes from each piece's middle and angle
     auto band = [&](CCPoint c, float rx, float ry, float rot, float thick, float a0, float a1, int pieces,
-        std::function<std::optional<ccColor3B>(CCPoint)> color) {
+        std::function<std::optional<ccColor3B>(CCPoint, float)> color) {
         float cr = std::cos(rot), sr = std::sin(rot);
         auto on = [&](float a, float k) {
             float x = (rx - k) * std::cos(a), y = (ry - k) * std::sin(a);
@@ -5094,104 +5120,179 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
         };
         for (int i = 0; i < pieces; ++i) {
             float a = a0 + (a1 - a0) * i / pieces, b = a0 + (a1 - a0) * (i + 1) / pieces;
-            if (auto fill = color(on((a + b) / 2.f, thick / 2.f))) {
+            if (auto fill = color(on((a + b) / 2.f, thick / 2.f), (a + b) / 2.f)) {
                 fillAnyWay(d, { on(a, 0.f), on(b, 0.f), on(b, thick), on(a, thick) }, clip, col(*fill, 1.f));
             }
         }
     };
+    // a thin ring round c, in pieces cut to the window
+    auto ringPieces = [&](CCPoint c, float rad, float thick, ccColor4F color, int pieces) {
+        auto on = [&](float a, float rr) { return CCPoint { c.x + rr * std::cos(a), c.y + rr * std::sin(a) }; };
+        for (int i = 0; i < pieces; ++i) {
+            float a = TAU * i / pieces, b = TAU * (i + 1) / pieces;
+            fillAnyWay(d, { on(a, rad), on(b, rad), on(b, rad - thick), on(a, rad - thick) }, clip, color);
+        }
+    };
+    // a comet or a shooting star falling down and left across the window, its tail pointing back
+    // up. It crosses once every `period` seconds, taking `active` of them, each time in a new
+    // lane (from laneLo to laneHi: -1 is the bottom right corner, 1 the top left).
+    auto faller = [&](int id, float period, float active, float offset, float laneLo, float laneHi, float tail, float width,
+        ccColor3B tailColor, float alpha, float head) {
+        CCPoint dir { 0.874f, 0.486f }, side { -dir.y, dir.x };
+        float clock = time + offset;
+        float pass = std::floor(clock / period);
+        float p = (clock - pass * period) / active;
+        if (p > 1.f) {
+            return;
+        }
+        float reach = dir.x * w / 2.f + dir.y * h / 2.f;  // from the middle to the far corner, along the path
+        float maxLane = side.y * h / 2.f - side.x * w / 2.f;
+        float pick = hash01(static_cast<uint32_t>(id) * 7349u + static_cast<uint32_t>(pass) * 31u + 11u);
+        float lane = maxLane * (laneLo + (laneHi - laneLo) * pick);
+        float start = reach + head * 3.f, end = -(reach + tail);
+        float s = start + (end - start) * p;
+        CCPoint c { r.getMidX() + side.x * lane + dir.x * s, r.getMidY() + side.y * lane + dir.y * s };
+        for (float k : { 1.f, 0.6f, 0.3f }) {
+            float half = width * (0.5f + 0.5f * k);
+            CCPoint off { side.x * half, side.y * half };
+            fillAnyWay(d, { { c.x + off.x, c.y + off.y }, { c.x + dir.x * tail * k, c.y + dir.y * tail * k }, { c.x - off.x, c.y - off.y } },
+                clip, col(mixColor(t.soft, tailColor, k), alpha));
+        }
+        fillClipped(d, ellipsePoints(c, head * 2.7f, head * 2.7f, 0.f, 16), clip, col(t.soft, 0.18f));
+        fillClipped(d, ellipsePoints(c, head, head, 0.f, 12), clip, white(0.9f));
+    };
 
     switch (t.deco) {
-        case Deco::Stars: {  // a starfield with a faint violet haze
-            glow(fromRight(0.62f, 0.6f), 0.44f * h, t.second, 0.022f, 8);
-            glow(at(0.42f, 0.2f), 0.3f * h, t.main, 0.018f, 6);
-            stars(60, 0.8f);
-            sparkle(d, fromRight(0.3f, 0.78f), 5.5f * dot, col(t.soft, 0.8f));
-            sparkle(d, at(0.4f, 0.62f), 4.f * dot, col(t.soft, 0.6f));
+        case Deco::Stars: {  // a drifting starfield, a faint violet haze and shooting stars
+            float breathe = 0.85f + 0.15f * wave(0.5f, 0.f);
+            glow(wander(fromRight(0.62f, 0.6f), 0.05f, 0.11f, 0.f), 0.44f * h, t.second, 0.022f * breathe, 8);
+            glow(wander(at(0.42f, 0.2f), 0.04f, 0.09f, 2.f), 0.3f * h, t.main, 0.018f * breathe, 6);
+            stars(60, 0.8f, 0.025f);
+            if (!mini) {
+                faller(1, 7.f, 0.9f, 2.5f, 0.15f, 0.85f, 0.3f * h, 0.006f * h, t.second, 0.16f, 0.006f * h);
+                faller(2, 11.f, 1.1f, 8.f, -0.2f, 0.6f, 0.24f * h, 0.005f * h, t.soft, 0.12f, 0.005f * h);
+            }
+            sparkle(d, fromRight(0.3f, 0.78f), 5.5f * dot * (0.7f + 0.3f * wave(1.3f, 0.f)), col(t.soft, 0.8f));
+            sparkle(d, at(0.4f, 0.62f), 4.f * dot * (0.7f + 0.3f * wave(1.1f, 2.f)), col(t.soft, 0.6f));
             break;
         }
-        case Deco::Clouds: {  // nebula clouds in the two accents
-            glow(fromRight(0.5f, 0.62f), 0.38f * h, t.main, 0.03f, 8);
-            glow(fromRight(0.95f, 0.28f), 0.3f * h, t.second, 0.03f, 8);
-            glow(fromRight(0.2f, 0.22f), 0.2f * h, t.second, 0.026f, 6);
-            glow(at(0.36f, 0.82f), 0.18f * h, t.main, 0.024f, 6);
-            stars(34, 0.6f);
-            sparkle(d, fromRight(0.62f, 0.5f), 4.5f * dot, col(t.soft, 0.7f));
+        case Deco::Clouds: {  // nebula clouds in the two accents, slowly drifting and swelling
+            glow(wander(fromRight(0.5f, 0.62f), 0.06f, 0.12f, 0.f), 0.38f * h * (1.f + 0.06f * wave(0.3f, 0.f)), t.main, 0.03f, 8);
+            glow(wander(fromRight(0.95f, 0.28f), 0.07f, 0.09f, 2.f), 0.3f * h * (1.f + 0.06f * wave(0.27f, 1.f)), t.second, 0.03f, 8);
+            glow(wander(fromRight(0.2f, 0.22f), 0.04f, 0.15f, 4.f), 0.2f * h * (1.f + 0.08f * wave(0.4f, 2.f)), t.second, 0.026f, 6);
+            glow(wander(at(0.36f, 0.82f), 0.05f, 0.1f, 1.f), 0.18f * h * (1.f + 0.08f * wave(0.35f, 3.f)), t.main, 0.024f, 6);
+            stars(34, 0.6f, 0.012f);
+            sparkle(d, fromRight(0.62f, 0.5f), 4.5f * dot * (0.7f + 0.3f * wave(1.2f, 1.f)), col(t.soft, 0.7f));
             break;
         }
-        case Deco::Orbit: {  // almost nothing: one orbit and a small moon on it
-            stars(18, 0.45f);
+        case Deco::Orbit: {  // almost nothing: one orbit with a small moon going round it
+            stars(18, 0.45f, 0.008f);
             CCPoint c = fromRight(0.62f, 0.42f);
-            circle(d, c, 0.075f * h, col(t.soft, 0.07f), 28);
+            circle(d, c, 0.075f * h * (1.f + 0.04f * wave(0.6f, 0.f)), col(t.soft, 0.07f), 28);
             auto orbit = ellipsePoints(c, 0.5f * h, 0.15f * h, 0.26f, 64);
             d->drawPolygon(orbit.data(), static_cast<unsigned>(orbit.size()), { 0, 0, 0, 0 }, 0.35f * dot, col(t.soft, 0.16f));
-            float a = -2.3f, cr = std::cos(0.26f), sr = std::sin(0.26f);
-            float x = 0.5f * h * std::cos(a), y = 0.15f * h * std::sin(a);
-            circle(d, { c.x + x * cr - y * sr, c.y + x * sr + y * cr }, 0.03f * h, col(t.soft, 0.6f), 16);
+            float cr = std::cos(0.26f), sr = std::sin(0.26f);
+            auto onOrbit = [&](float a) {
+                float x = 0.5f * h * std::cos(a), y = 0.15f * h * std::sin(a);
+                return CCPoint { c.x + x * cr - y * sr, c.y + x * sr + y * cr };
+            };
+            float a = -2.3f + time * TAU / 18.f;
+            for (int k = 5; k >= 1; --k) {  // its trail
+                circle(d, onOrbit(a - k * 0.07f), 0.03f * h * (1.f - k * 0.13f), col(t.soft, 0.09f * (6 - k) / 5.f), 12);
+            }
+            circle(d, onOrbit(a), 0.03f * h, col(t.soft, 0.6f), 16);
             break;
         }
-        case Deco::Rings: {  // a ringed planet in the corner
-            glow(fromRight(0.6f, 0.4f), 0.44f * h, t.main, 0.016f, 7);
-            stars(26, 0.5f);
+        case Deco::Rings: {  // a ringed planet with a light running round the ring and a moon
+            glow(fromRight(0.6f, 0.4f), 0.44f * h, t.main, 0.016f * (0.85f + 0.15f * wave(0.4f, 0.f)), 7);
+            stars(26, 0.5f, 0.012f);
             CCPoint c = fromRight(0.6f, 0.38f);
             float R = 0.17f * h, rx = 0.36f * h, ry = 0.085f * h, rot = 0.33f, thick = 0.045f * h;
-            auto ring = [&](CCPoint) -> std::optional<ccColor3B> { return mixColor(bgAt(0.38f), t.soft, 0.2f); };
-            band(c, rx, ry, rot, thick, 0.f, 2.f * 3.14159265f, mini ? 24 : 72, ring);  // behind
+            auto ring = [&](CCPoint, float angle) -> std::optional<ccColor3B> {
+                float off = std::remainder(angle - time * 0.5f, TAU);
+                float shine = std::max(0.f, 1.f - std::abs(off) / 0.7f);
+                return mixColor(bgAt(0.38f), t.soft, 0.2f + 0.22f * shine * shine);
+            };
+            float ma = time * TAU / 16.f + 1.f, cr = std::cos(rot), sr = std::sin(rot);
+            float mx = 0.52f * h * std::cos(ma), my = 0.14f * h * std::sin(ma);
+            CCPoint moon { c.x + mx * cr - my * sr, c.y + mx * sr + my * cr };
+            bool moonInFront = std::sin(ma) < 0.f;
+            auto drawMoon = [&] { circle(d, moon, 0.024f * h, col(mixColor(bgAt(0.4f), t.soft, 0.55f), 1.f), 16); };
+            if (!moonInFront) {
+                drawMoon();
+            }
+            band(c, rx, ry, rot, thick, 0.f, TAU, mini ? 24 : 72, ring);  // behind
             circle(d, c, R, col(mixColor(bgAt(0.38f), t.main, 0.2f), 1.f), 40);
             // the front of the ring over the planet, with a gap around it
-            auto gap = [&](CCPoint p) -> std::optional<ccColor3B> {
+            auto gap = [&](CCPoint p, float) -> std::optional<ccColor3B> {
                 if (ccpDistance(p, c) > R + thick) {
                     return std::nullopt;
                 }
                 return mixColor(bgAt((p.y - r.getMinY()) / h), t.main, 0.08f);
             };
-            band(c, rx + thick * 0.6f, ry + thick * 0.6f, rot, thick * 2.2f, 3.14159265f, 2.f * 3.14159265f, mini ? 18 : 54, gap);
-            band(c, rx, ry, rot, thick, 3.14159265f, 2.f * 3.14159265f, mini ? 18 : 54, ring);
+            band(c, rx + thick * 0.6f, ry + thick * 0.6f, rot, thick * 2.2f, TAU / 2.f, TAU, mini ? 18 : 54, gap);
+            band(c, rx, ry, rot, thick, TAU / 2.f, TAU, mini ? 18 : 54, ring);
+            if (moonInFront) {
+                drawMoon();
+            }
             break;
         }
-        case Deco::Dust: {  // a dust storm over a red horizon, and two small moons
-            glow(at(0.5f, -0.9f), 1.15f * h, t.main, 0.03f, 7);
+        case Deco::Dust: {  // dust blowing over a red horizon, and two small moons
+            glow(at(0.5f, -0.9f), 1.15f * h, t.main, 0.03f * (0.85f + 0.15f * wave(0.35f, 0.f)), 7);
             int n = mini ? 24 : 80;
             for (int i = 0; i < n; ++i) {
-                float u = 0.02f + 0.96f * dice.next(), v = 0.05f + 0.86f * std::pow(dice.next(), 1.5f);
-                float k = dice.next();
-                circle(d, at(u, v), (0.5f + 1.4f * k * k) * dot, col(mixColor(t.main, t.second, dice.next()), 0.12f + 0.3f * dice.next()), 8);
+                float u0 = dice.next(), v0 = 0.05f + 0.86f * std::pow(dice.next(), 1.5f);
+                float k = dice.next(), shade = dice.next(), bright = dice.next(), phase = dice.next() * TAU;
+                float u = u0 + time * (0.012f + 0.05f * k) * h / w;  // the wind blows them right, the big ones faster
+                u -= std::floor(u);
+                float v = v0 + 0.012f * std::sin(time * (0.5f + k) + phase);
+                float a = (0.12f + 0.3f * bright) * edgeFade(u);
+                if (a > 0.004f) {
+                    circle(d, at(u, v), (0.5f + 1.4f * k * k) * dot, col(mixColor(t.main, t.second, shade), a), 8);
+                }
             }
-            circle(d, fromRight(0.36f, 0.68f), 0.034f * h, col(t.soft, 0.3f), 24);
-            circle(d, fromRight(0.8f, 0.75f), 0.019f * h, col(t.soft, 0.24f), 16);
+            circle(d, fromRight(0.36f + 0.05f * wave(0.08f, 0.f), 0.68f + 0.015f * wave(0.08f, 1.6f)), 0.034f * h, col(t.soft, 0.3f), 24);
+            circle(d, fromRight(0.8f + 0.04f * wave(0.05f, 2.f), 0.75f + 0.01f * wave(0.05f, 3.6f)), 0.019f * h, col(t.soft, 0.24f), 16);
             break;
         }
-        case Deco::Horizon: {  // a banded planet rising in the corner
-            stars(44, 0.65f);
+        case Deco::Horizon: {  // a banded planet rising in the corner, a moon crossing the sky
+            stars(44, 0.65f, 0.015f);
+            float mu = time / 45.f + 0.3f;
+            mu -= std::floor(mu);
+            circle(d, at(mu, 0.56f + 0.24f * std::sin(mu * TAU / 2.f)), 0.02f * h, col(t.soft, 0.55f * edgeFade(mu)), 16);
             CCPoint c = fromRight(-0.05f, -0.62f);
-            float R = 1.f * h;
+            float R = 1.f * h, pulse = 0.8f + 0.2f * wave(0.5f, 0.f);
             for (int i = 6; i >= 1; --i) {
-                fillClipped(d, ellipsePoints(c, R + i * 0.022f * h, R + i * 0.022f * h, 0.f, 96), clip, col(t.second, 0.035f));
+                float rr = R + i * 0.022f * h * (1.f + 0.1f * wave(0.4f, 0.f));
+                fillClipped(d, ellipsePoints(c, rr, rr, 0.f, 96), clip, col(t.second, 0.035f * pulse));
             }
             ccColor3B body = mixColor(bgAt(0.2f), t.main, 0.22f);
             auto disc = ellipsePoints(c, R, R, 0.f, 96);
             fillClipped(d, disc, clip, col(body, 1.f));
-            // its bands: the disc cut to thin strips
+            // its bands: the disc cut to thin strips that slowly sway
             float bands[][2] = { { 0.05f, 0.09f }, { 0.15f, 0.17f }, { 0.23f, 0.28f } };
-            for (auto const& b : bands) {
-                std::vector<CCPoint> strip { { r.getMinX(), r.getMinY() + b[0] * h }, { r.getMaxX(), r.getMinY() + b[0] * h },
-                    { r.getMaxX(), r.getMinY() + b[1] * h }, { r.getMinX(), r.getMinY() + b[1] * h } };
+            for (int i = 0; i < 3; ++i) {
+                float sway = 0.012f * wave(0.3f, i * 1.7f);
+                float lo = r.getMinY() + (bands[i][0] + sway) * h, hi = r.getMinY() + (bands[i][1] + sway) * h;
+                std::vector<CCPoint> strip { { r.getMinX(), lo }, { r.getMaxX(), lo }, { r.getMaxX(), hi }, { r.getMinX(), hi } };
                 fillClipped(d, clipConvex(disc, strip), clip, col(mixColor(body, t.second, 0.14f), 1.f));
             }
             break;
         }
-        case Deco::Aurora: {  // curtains of light
-            stars(36, 0.55f);
-            int n = mini ? 34 : 96;
+        case Deco::Aurora: {  // curtains of light, waving
+            stars(36, 0.55f, 0.01f);
+            int n = mini ? 34 : 80;
             for (int ribbon = 0; ribbon < 2; ++ribbon) {
                 for (int i = 0; i < n; ++i) {
                     float u = 0.04f + 0.92f * i / (n - 1);
-                    float base = ribbon == 0 ? 0.48f + 0.12f * std::sin(u * 7.f + 0.4f) + 0.05f * std::sin(u * 17.f)
-                                             : 0.26f + 0.07f * std::sin(u * 5.f + 2.f);
-                    float tall = (ribbon == 0 ? 0.2f + 0.14f * std::pow(std::sin(u * 5.f + 1.3f), 2.f) : 0.12f) * h;
+                    float base = ribbon == 0 ? 0.48f + 0.12f * std::sin(u * 7.f + 0.4f + time * 0.35f) + 0.05f * std::sin(u * 17.f - time * 0.6f)
+                                             : 0.26f + 0.07f * std::sin(u * 5.f + 2.f - time * 0.28f);
+                    float tall = (ribbon == 0 ? 0.2f + 0.14f * std::pow(std::sin(u * 5.f + 1.3f + time * 0.25f), 2.f)
+                                              : 0.12f + 0.03f * std::sin(u * 9.f + time * 0.5f)) * h;
                     float cw = 0.55f * 0.92f * w / n;
                     float x = r.getMinX() + u * w - cw / 2.f, y = r.getMinY() + base * h;
-                    ccColor3B c = mixColor(t.main, t.second, u);
-                    float a = (ribbon == 0 ? 0.08f : 0.05f) * (0.7f + 0.3f * std::sin(u * 23.f));
+                    ccColor3B c = mixColor(t.main, t.second, std::clamp(u + 0.25f * std::sin(time * 0.2f), 0.f, 1.f));
+                    float a = (ribbon == 0 ? 0.08f : 0.05f) * (0.7f + 0.3f * std::sin(u * 23.f + time * 1.1f));
                     // brighter at the foot, fading up
                     float parts[][3] = { { 0.f, 0.3f, 1.8f }, { 0.3f, 0.65f, 1.f }, { 0.65f, 1.f, 0.45f } };
                     for (auto const& p : parts) {
@@ -5202,49 +5303,123 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
             }
             break;
         }
-        case Deco::Burst: {  // a star going off: rays and a hot core
+        case Deco::Burst: {  // a star going off: turning rays, a pulsing core and shock waves
             CCPoint c = fromRight(0.55f, 0.6f);
-            glow(c, 0.5f * h, t.second, 0.02f, 8);
-            stars(30, 0.5f);
+            glow(c, 0.5f * h * (1.f + 0.04f * wave(0.8f, 0.f)), t.second, 0.02f, 8);
+            stars(30, 0.5f, 0.01f);
+            if (!mini) {
+                for (int i = 0; i < 2; ++i) {
+                    float p = time / 3.6f + i * 0.5f;
+                    p -= std::floor(p);
+                    ringPieces(c, (0.06f + 0.75f * p) * h, 0.014f * h * (1.f - 0.5f * p), col(t.soft, 0.11f * (1.f - p) * (1.f - p)), 64);
+                }
+            }
             int rays = 22;
             for (int i = 0; i < rays; ++i) {
-                float a = i * 2.f * 3.14159265f / rays + (dice.next() - 0.5f) * 0.18f;
-                float len = (0.35f + 0.6f * dice.next()) * h, half = (0.008f + 0.01f * dice.next()) * h;
+                float a = i * TAU / rays + (dice.next() - 0.5f) * 0.18f + time * 0.05f;
+                float len = (0.35f + 0.6f * dice.next()) * h * (0.82f + 0.18f * std::sin(time * 1.3f + i * 1.7f));
+                float half = (0.008f + 0.01f * dice.next()) * h;
                 CCPoint dir { std::cos(a), std::sin(a) }, side { -dir.y * half, dir.x * half };
                 fillAnyWay(d, { { c.x + side.x, c.y + side.y }, { c.x + dir.x * len, c.y + dir.y * len }, { c.x - side.x, c.y - side.y } }, clip,
                     col(i % 2 ? t.second : t.main, 0.07f));
             }
-            glow(c, 0.2f * h, t.main, 0.04f, 6);
-            circle(d, c, 0.05f * h, col(t.soft, 0.3f), 24);
+            float beat = 0.5f + 0.5f * wave(2.2f, 0.f);
+            glow(c, 0.2f * h * (1.f + 0.1f * beat), t.main, 0.04f, 6);
+            circle(d, c, 0.05f * h * (1.f + 0.15f * beat), col(t.soft, 0.3f), 24);
             circle(d, c, 0.022f * h, white(0.85f), 16);
             break;
         }
-        case Deco::Comets: {  // comets with long tails
-            stars(42, 0.6f);
-            CCPoint dir { 0.874f, 0.486f };  // the tails point up and right
-            CCPoint heads[] = { at(0.42f, 0.34f), fromRight(0.55f, 0.6f), fromRight(0.22f, 0.24f), at(0.3f, 0.72f) };
-            float lengths[] = { 0.55f, 0.42f, 0.3f, 0.25f };
-            for (int i = 0; i < 4; ++i) {
-                CCPoint p = heads[i];
-                float len = lengths[i] * h, half = 0.022f * h * (lengths[i] + 0.4f);
-                for (float k : { 1.f, 0.6f, 0.3f }) {
-                    CCPoint side { -dir.y * half * (0.5f + 0.5f * k), dir.x * half * (0.5f + 0.5f * k) };
-                    fillAnyWay(d, { { p.x + side.x, p.y + side.y }, { p.x + dir.x * len * k, p.y + dir.y * len * k }, { p.x - side.x, p.y - side.y } },
-                        clip, col(mixColor(t.soft, t.second, k), 0.06f));
+        case Deco::Comets: {  // comets falling, with long tails
+            stars(42, 0.6f, 0.02f);
+            if (mini) {  // the card's preview: four comets standing still
+                CCPoint dir { 0.874f, 0.486f };
+                CCPoint heads[] = { at(0.42f, 0.34f), fromRight(0.55f, 0.6f), fromRight(0.22f, 0.24f), at(0.3f, 0.72f) };
+                float lengths[] = { 0.55f, 0.42f, 0.3f, 0.25f };
+                for (int i = 0; i < 4; ++i) {
+                    CCPoint p = heads[i];
+                    float len = lengths[i] * h, half = 0.022f * h * (lengths[i] + 0.4f);
+                    for (float k : { 1.f, 0.6f, 0.3f }) {
+                        CCPoint side { -dir.y * half * (0.5f + 0.5f * k), dir.x * half * (0.5f + 0.5f * k) };
+                        fillAnyWay(d, { { p.x + side.x, p.y + side.y }, { p.x + dir.x * len * k, p.y + dir.y * len * k }, { p.x - side.x, p.y - side.y } },
+                            clip, col(mixColor(t.soft, t.second, k), 0.06f));
+                    }
+                    circle(d, p, 0.03f * h * (lengths[i] + 0.4f), col(t.soft, 0.18f), 16);
+                    circle(d, p, std::max(0.011f * h, 0.45f), white(0.85f), 12);
                 }
-                circle(d, p, 0.03f * h * (lengths[i] + 0.4f), col(t.soft, 0.18f), 16);
-                circle(d, p, std::max(0.011f * h, 0.45f), white(0.85f), 12);
+                break;
+            }
+            for (int i = 0; i < 4; ++i) {
+                float size = 0.6f + 0.4f * hash01(static_cast<uint32_t>(i) * 13u + 5u);
+                faller(10 + i, 5.f + 1.9f * i, 2.6f + 0.4f * i, i * 1.7f, -0.6f, 0.75f, (0.3f + 0.25f * size) * h, 0.02f * h * size,
+                    t.second, 0.07f, 0.011f * h * size);
             }
             break;
         }
     }
 }
 
-// the window's background: its gradient and the theme's art, cut to its rounded shape
-static void drawBackdrop(CCDrawNode* d, MenuTheme const& t, CCRect r, float rad, bool mini) {
-    gradientRect(d, r, rad, t.top, t.bottom);
-    drawDeco(d, t, r, roundRectPoints(r, rad), mini);
-}
+float backdropClock = 0.f;  // so the art goes on where it was when the window is rebuilt
+
+// v3.5: a moving backdrop: the gradient drawn once, the art redrawn as time goes on (every
+// frame in a window, 30 times a second in a card's preview)
+class Backdrop : public CCNode {
+    MenuTheme m_theme {};
+    CCRect m_rect {};
+    std::vector<CCPoint> m_clip;
+    CCDrawNode* m_art = nullptr;
+    bool m_mini = false;
+    float m_time = 0.f;
+    float m_wait = 0.f;
+
+    bool initWith(MenuTheme const& t, CCRect r, float rad, bool mini) {
+        if (!CCNode::init()) {
+            return false;
+        }
+        m_theme = t;
+        m_rect = r;
+        m_mini = mini;
+        m_clip = roundRectPoints(r, rad);
+        m_time = backdropClock;
+        auto* back = CCDrawNode::create();
+        gradientRect(back, r, rad, t.top, t.bottom);
+        this->addChild(back);
+        m_art = CCDrawNode::create();
+        this->addChild(m_art);
+        redraw();
+        this->scheduleUpdate();
+        return true;
+    }
+
+    void redraw() {
+        m_art->clear();
+        drawDeco(m_art, m_theme, m_rect, m_clip, m_mini, m_time);
+    }
+
+public:
+    static Backdrop* create(MenuTheme const& t, CCRect r, float rad, bool mini) {
+        auto* node = new Backdrop();
+        if (node->initWith(t, r, rad, mini)) {
+            node->autorelease();
+            return node;
+        }
+        delete node;
+        return nullptr;
+    }
+
+    void update(float dt) override {
+        dt = std::min(dt, 0.1f);
+        m_time += dt;
+        if (!m_mini) {
+            backdropClock = m_time;
+        }
+        m_wait -= dt;
+        if (m_mini && m_wait > 0.f) {
+            return;
+        }
+        m_wait = 1.f / 30.f;
+        redraw();
+    }
+};
 
 // a few sparkles that slowly pulse over the backdrop
 static void addTwinkles(CCNode* parent, MenuTheme const& t, CCRect r, int z) {
@@ -5261,16 +5436,18 @@ static void addTwinkles(CCNode* parent, MenuTheme const& t, CCRect r, int z) {
     }
 }
 
-// the window the menu and the update window share: a shadow, the theme's backdrop, the header
-// (its line in the accents) and the Saturn icon
+// the window the menu and the update window share: a shadow, the theme's moving backdrop, the
+// header (its line in the accents) and the Saturn icon
 static void drawWindow(CCNode* parent, MenuTheme const& t, float w, float h, float header) {
-    auto* back = CCDrawNode::create();
+    auto* shadow = CCDrawNode::create();
     for (int i = 6; i >= 1; --i) {
         float g = i * 1.6f;
-        roundRect(back, { -g, -g - 2.f, w + 2.f * g, h + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
+        roundRect(shadow, { -g, -g - 2.f, w + 2.f * g, h + 2.f * g }, 12.f + g, col({ 0, 0, 0 }, 0.05f));
     }
-    drawBackdrop(back, t, { 0.f, 0.f, w, h }, 12.f, false);
-    parent->addChild(back, -2);
+    parent->addChild(shadow, -2);
+    if (auto* backdrop = Backdrop::create(t, { 0.f, 0.f, w, h }, 12.f, false)) {
+        parent->addChild(backdrop, -2);
+    }
     addTwinkles(parent, t, { 0.f, 0.f, w, h }, -2);
 
     auto* d = CCDrawNode::create();
@@ -5292,10 +5469,9 @@ static void drawWindow(CCNode* parent, MenuTheme const& t, float w, float h, flo
     }
 }
 
-// a theme's card preview: the window scaled down, with its header, sidebar and two tiles
-static void drawPreview(CCDrawNode* d, MenuTheme const& t, CCRect r) {
+// what a card's preview draws over its backdrop: the window's header, sidebar and two tiles
+static void drawPreviewUi(CCDrawNode* d, MenuTheme const& t, CCRect r) {
     float rad = 4.f;
-    drawBackdrop(d, t, r, rad, true);
     float x0 = r.getMinX(), y0 = r.getMinY(), w = r.size.width, h = r.size.height;
     float top = y0 + h - 6.5f;  // the header's line
     d->drawSegment({ x0 + 1.f, top }, { x0 + w - 1.f, top }, 0.2f, white(0.08f));
@@ -5328,6 +5504,16 @@ static void drawPreview(CCDrawNode* d, MenuTheme const& t, CCRect r) {
     roundRect(d, { cx + 2.f, t2 - 0.5f, (cwid - 4.f) * 0.62f, 1.f }, 0.5f, col(t.soft, 0.9f));
     // the outline on top
     roundRect(d, r, rad, { 0, 0, 0, 0 }, 0.4f, white(0.12f));
+}
+
+// a theme's card preview, moving like the window: the backdrop, then the little window over it
+static void addPreview(CCNode* parent, MenuTheme const& t, CCRect r) {
+    if (auto* backdrop = Backdrop::create(t, r, 4.f, true)) {
+        parent->addChild(backdrop, 1);
+    }
+    auto* ui = CCDrawNode::create();
+    drawPreviewUi(ui, t, r);
+    parent->addChild(ui, 2);
 }
 
 void checkForUpdate(bool manual);  // v3.3, with the update window
@@ -5854,7 +6040,6 @@ private:
         auto* d = CCDrawNode::create();
         roundRect(d, { 0.f, 0.f, cw, ch }, 7.f, active ? col(t.main, 0.14f) : white(0.035f), active ? 0.9f : 0.5f,
             active ? col(t.main, 1.f) : white(0.08f));
-        drawPreview(d, t, { 3.f, 14.f, cw - 6.f, ch - 17.f });
         if (active) {
             circle(d, { cw - 9.f, 7.5f }, 4.5f, col(t.main, 1.f), 20);
             d->drawSegment({ cw - 11.2f, 7.5f }, { cw - 9.6f, 5.9f }, 0.5f, white(1.f));
@@ -5865,6 +6050,7 @@ private:
             circle(d, { cw - 8.f, 7.5f }, 2.6f, col(t.second, 1.f), 14);
         }
         node->addChild(d);
+        addPreview(node, t, { 3.f, 14.f, cw - 6.f, ch - 17.f });  // moving, like the window
         auto* l = CCLabelBMFont::create(t.name, font());
         l->setColor(active ? m_text : m_muted);
         l->setAnchorPoint({ 0.f, 0.5f });

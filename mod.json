@@ -5,7 +5,7 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v3.4.0",
+	"version": "v3.5.0",
 	"id": "timbodev.input-buffer",
 	"name": "Kosmos",
 	"developer": "timbodev",
@@ -407,7 +407,7 @@
 		"menu-theme": {
 			"type": "string",
 			"name": "Menu theme",
-			"description": "The look of the in-game menu: its gradient, the art behind it and the accent colours. Deep space: Kosmos, Nebula, Void. Planets: Saturn, Mars, Neptune. Phenomena: Aurora, Supernova, Comet.",
+			"description": "The look of the in-game menu: its gradient, the moving art behind it and the accent colours. Deep space: Kosmos, Nebula, Void. Planets: Saturn, Mars, Neptune. Phenomena: Aurora, Supernova, Comet.",
 			"default": "Kosmos",
 			"one-of": [
 				"Kosmos",
