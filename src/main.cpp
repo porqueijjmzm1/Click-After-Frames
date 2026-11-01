@@ -5060,7 +5060,7 @@ static void sparkle(CCDrawNode* d, CCPoint c, float r, ccColor4F color) {
 // The theme's art in the rectangle r (the window, or a card's preview), cut to `clip`. Sizes
 // go with the height and the big pieces sit from the right edge, so a wide preview is the
 // window scaled down.
-static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CCPoint> const& clip, bool small) {
+static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CCPoint> const& clip, bool mini) {
     float w = r.size.width, h = r.size.height;
     auto at = [&](float u, float v) { return CCPoint { r.getMinX() + u * w, r.getMinY() + v * h }; };
     auto fromRight = [&](float x, float v) { return CCPoint { r.getMaxX() - x * h, r.getMinY() + v * h }; };
@@ -5069,7 +5069,7 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
     Dice dice { static_cast<uint32_t>(t.deco) * 7919u + 17u };
 
     auto stars = [&](int count, float alpha) {
-        int n = small ? std::max(count / 3, 4) : count;
+        int n = mini ? std::max(count / 3, 4) : count;
         for (int i = 0; i < n; ++i) {
             float u = 0.03f + 0.94f * dice.next(), v = 0.05f + 0.88f * dice.next();
             float k = dice.next();
@@ -5135,7 +5135,7 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
             CCPoint c = fromRight(0.6f, 0.38f);
             float R = 0.17f * h, rx = 0.36f * h, ry = 0.085f * h, rot = 0.33f, thick = 0.045f * h;
             auto ring = [&](CCPoint) -> std::optional<ccColor3B> { return mixColor(bgAt(0.38f), t.soft, 0.2f); };
-            band(c, rx, ry, rot, thick, 0.f, 2.f * 3.14159265f, small ? 24 : 72, ring);  // behind
+            band(c, rx, ry, rot, thick, 0.f, 2.f * 3.14159265f, mini ? 24 : 72, ring);  // behind
             circle(d, c, R, col(mixColor(bgAt(0.38f), t.main, 0.2f), 1.f), 40);
             // the front of the ring over the planet, with a gap around it
             auto gap = [&](CCPoint p) -> std::optional<ccColor3B> {
@@ -5144,13 +5144,13 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
                 }
                 return mixColor(bgAt((p.y - r.getMinY()) / h), t.main, 0.08f);
             };
-            band(c, rx + thick * 0.6f, ry + thick * 0.6f, rot, thick * 2.2f, 3.14159265f, 2.f * 3.14159265f, small ? 18 : 54, gap);
-            band(c, rx, ry, rot, thick, 3.14159265f, 2.f * 3.14159265f, small ? 18 : 54, ring);
+            band(c, rx + thick * 0.6f, ry + thick * 0.6f, rot, thick * 2.2f, 3.14159265f, 2.f * 3.14159265f, mini ? 18 : 54, gap);
+            band(c, rx, ry, rot, thick, 3.14159265f, 2.f * 3.14159265f, mini ? 18 : 54, ring);
             break;
         }
         case Deco::Dust: {  // a dust storm over a red horizon, and two small moons
             glow(at(0.5f, -0.9f), 1.15f * h, t.main, 0.03f, 7);
-            int n = small ? 24 : 80;
+            int n = mini ? 24 : 80;
             for (int i = 0; i < n; ++i) {
                 float u = 0.02f + 0.96f * dice.next(), v = 0.05f + 0.86f * std::pow(dice.next(), 1.5f);
                 float k = dice.next();
@@ -5181,7 +5181,7 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
         }
         case Deco::Aurora: {  // curtains of light
             stars(36, 0.55f);
-            int n = small ? 34 : 96;
+            int n = mini ? 34 : 96;
             for (int ribbon = 0; ribbon < 2; ++ribbon) {
                 for (int i = 0; i < n; ++i) {
                     float u = 0.04f + 0.92f * i / (n - 1);
@@ -5241,9 +5241,9 @@ static void drawDeco(CCDrawNode* d, MenuTheme const& t, CCRect r, std::vector<CC
 }
 
 // the window's background: its gradient and the theme's art, cut to its rounded shape
-static void drawBackdrop(CCDrawNode* d, MenuTheme const& t, CCRect r, float rad, bool small) {
+static void drawBackdrop(CCDrawNode* d, MenuTheme const& t, CCRect r, float rad, bool mini) {
     gradientRect(d, r, rad, t.top, t.bottom);
-    drawDeco(d, t, r, roundRectPoints(r, rad), small);
+    drawDeco(d, t, r, roundRectPoints(r, rad), mini);
 }
 
 // a few sparkles that slowly pulse over the backdrop
