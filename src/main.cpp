@@ -16,6 +16,7 @@
 //    dead flipGravity hook priority, optional console, in-game console (stage + live log, hidden by default).
 
 #include <Geode/Geode.hpp>
+#include <Geode/utils/web.hpp>
 #include <Geode/modify/EffectGameObject.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/GameObject.hpp>
@@ -4866,14 +4867,16 @@ class BufferMenu : public geode::Popup {
         { "explain-inputs", "Explain inputs" },
         { "remove-watermark", "Remove watermark" },
         { "hide-menu-buttons", "Hide menu buttons" },
+        { "auto-update", "Auto update" },
     };
-    static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Frames", "Tools" };
+    static constexpr char const* TABS[] = { "Buffer", "Prediction", "Modes", "Frames", "Tools", "Themes" };
     static constexpr char const* TAB_INFO[] = {
         "How far back an early click can be held.",
         "What the hidden ghost checks before a click goes through.",
         "Helpers for each game mode, and latency.",
         "Your own limit for each game mode. 0 = no buffer.",
-        "What you see while playing, stats and the log.",
+        "What you see while playing, stats, the log and updates.",
+        "The menu's colours. Tap one to use it.",
     };
     // one chip per stage, in STAGES order
     static constexpr char const* STAGE_CHIPS[] = { "0.5f", "1f", "2f", "4f", "6f", "8f", "Custom", "Off" };
@@ -4882,24 +4885,33 @@ class BufferMenu : public geode::Popup {
     struct Theme {
         ccColor3B main, soft;
     };
+    struct ThemeDef {
+        char const* name;
+        ccColor3B main, soft;
+    };
+    // v3.1: the "Menu theme" setting's choices, in the order the Themes tab shows them
+    static inline const ThemeDef THEMES[] = {
+        { "Blue", { 62, 152, 255 }, { 176, 214, 255 } },
+        { "Purple", { 146, 108, 255 }, { 208, 192, 255 } },
+        { "Pink", { 255, 98, 176 }, { 255, 192, 226 } },
+        { "Red", { 240, 72, 86 }, { 255, 186, 192 } },
+        { "Orange", { 255, 138, 48 }, { 255, 208, 160 } },
+        { "Gold", { 236, 190, 60 }, { 250, 230, 170 } },
+        { "Green", { 52, 205, 124 }, { 178, 242, 204 } },
+        { "Teal", { 38, 198, 206 }, { 170, 236, 240 } },
+        { "Dark", { 122, 130, 148 }, { 226, 230, 238 } },
+    };
 
 public:
     // the "Menu theme" setting picks the accent colour (blue by default)
     static Theme currentTheme() {
         auto name = Mod::get()->getSettingValue<std::string>("menu-theme");
-        if (name == "Purple") {
-            return { { 146, 108, 255 }, { 208, 192, 255 } };
+        for (auto const& t : THEMES) {
+            if (name == t.name) {
+                return { t.main, t.soft };
+            }
         }
-        if (name == "Pink") {
-            return { { 255, 98, 176 }, { 255, 192, 226 } };
-        }
-        if (name == "Green") {
-            return { { 52, 205, 124 }, { 178, 242, 204 } };
-        }
-        if (name == "Dark") {
-            return { { 122, 130, 148 }, { 226, 230, 238 } };
-        }
-        return { { 62, 152, 255 }, { 176, 214, 255 } };
+        return { THEMES[0].main, THEMES[0].soft };
     }
 
 private:
@@ -4925,6 +4937,7 @@ private:
     ccColor3B m_good { 80, 222, 140 };
     ccColor3B m_bad { 240, 92, 104 };
 
+    CCNode* m_frame = nullptr;
     CCMenu* m_frameMenu = nullptr;
     CCNode* m_tabsNode = nullptr;
     CCNode* m_page = nullptr;
@@ -5137,6 +5150,12 @@ private:
                 d->drawSegment({ c.x - 5.f, c.y }, { c.x + 5.f, c.y }, 0.6f, color);
                 circle(d, { c.x + 1.5f, c.y }, 2.3f, color, 14);
                 break;
+            case 5:  // a palette: a ring with three colours
+                circle(d, c, 5.f, { 0, 0, 0, 0 }, 24, 0.6f, color);
+                circle(d, { c.x - 2.f, c.y + 1.4f }, 1.3f, col(THEMES[2].main, 1.f), 10);
+                circle(d, { c.x + 2.f, c.y + 1.4f }, 1.3f, col(THEMES[0].main, 1.f), 10);
+                circle(d, { c.x, c.y - 2.1f }, 1.3f, col(THEMES[5].main, 1.f), 10);
+                break;
             default:  // four squares: the toolbox
                 for (int i = 0; i < 4; ++i) {
                     float x = c.x + (i % 2 ? 0.8f : -3.8f), y = c.y + (i / 2 ? 0.8f : -3.8f);
@@ -5149,6 +5168,11 @@ private:
     // ---------- the window ----------
 
     void buildFrame() {
+        if (m_frame) {
+            m_frame->removeFromParent();
+        }
+        m_frame = CCNode::create();
+        m_mainLayer->addChild(m_frame, 0);
         auto* d = CCDrawNode::create();
         // a soft shadow under the window
         for (int i = 6; i >= 1; --i) {
@@ -5163,30 +5187,30 @@ private:
         // the icon's tile
         float cy = H - HEADER / 2.f;
         roundRect(d, { 10.f, cy - 11.f, 22.f, 22.f }, 6.f, col(m_t.main, 0.2f), 0.6f, col(m_t.main, 0.7f));
-        m_mainLayer->addChild(d, -1);
+        m_frame->addChild(d, -1);
         // the accent fading out along the header line
         auto* line = CCLayerGradient::create({ m_t.main.r, m_t.main.g, m_t.main.b, 220 }, { m_t.main.r, m_t.main.g, m_t.main.b, 0 }, { 1.f, 0.f });
         line->setContentSize({ W * 0.6f, 1.f });
         line->setPosition({ 12.f, H - HEADER - 0.5f });
-        m_mainLayer->addChild(line, 0);
+        m_frame->addChild(line, 0);
 
         if (auto* mouse = CCSprite::create("mouse.png"_spr)) {
             mouse->setScale(15.f / mouse->getContentSize().height);
             mouse->setColor(m_t.soft);
             mouse->setPosition({ 21.f, cy });
-            m_mainLayer->addChild(mouse, 2);
+            m_frame->addChild(mouse, 2);
         }
-        label(m_mainLayer, "Input Buffer", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
-        label(m_mainLayer, Mod::get()->getVersion().toVString(), 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
+        label(m_frame, "Input Buffer", 0.6f, m_text, { 40.f, cy + 5.f }, { 0.f, 0.5f });
+        label(m_frame, Mod::get()->getVersion().toVString(), 0.34f, m_dim, { 40.f, cy - 7.5f }, { 0.f, 0.5f });
 
         // the status pill: is the buffer on, and how far
         m_pill = CCDrawNode::create();
-        m_mainLayer->addChild(m_pill, 2);
-        m_pillLabel = label(m_mainLayer, "", 0.42f, m_text, { W - 86.f, cy }, { 0.5f, 0.5f });
+        m_frame->addChild(m_pill, 2);
+        m_pillLabel = label(m_frame, "", 0.42f, m_text, { W - 86.f, cy }, { 0.5f, 0.5f });
 
         m_frameMenu = CCMenu::create();
         m_frameMenu->setPosition({ 0.f, 0.f });
-        m_mainLayer->addChild(m_frameMenu, 5);
+        m_frame->addChild(m_frameMenu, 5);
         auto* node = CCNode::create();
         node->setContentSize({ 20.f, 20.f });
         auto* x = CCDrawNode::create();
@@ -5199,8 +5223,8 @@ private:
         m_frameMenu->addChild(close);
 
         // the session's saves, at the bottom of the sidebar
-        label(m_mainLayer, "THIS SESSION", 0.3f, m_dim, { 17.f, 34.f }, { 0.f, 0.5f });
-        m_saves = label(m_mainLayer, "", 0.46f, m_text, { 17.f, 21.f }, { 0.f, 0.5f });
+        label(m_frame, "THIS SESSION", 0.3f, m_dim, { 17.f, 34.f }, { 0.f, 0.5f });
+        m_saves = label(m_frame, "", 0.46f, m_text, { 17.f, 21.f }, { 0.f, 0.5f });
     }
 
     void refreshHeader() {
@@ -5389,6 +5413,48 @@ private:
         }
     }
 
+    void pageThemes() {
+        heading();
+        auto current = Mod::get()->getSettingValue<std::string>("menu-theme");
+        float cw = (CW - 16.f) / 3.f, ch = 40.f;
+        float top = H - HEADER - 64.f;
+        // an unknown name (an old or hand-edited setting) falls back to the first theme
+        bool known = std::any_of(std::begin(THEMES), std::end(THEMES), [&](ThemeDef const& o) { return current == o.name; });
+        for (int i = 0; i < static_cast<int>(std::size(THEMES)); ++i) {
+            auto const& t = THEMES[i];
+            bool active = known ? current == t.name : i == 0;
+            auto* node = CCNode::create();
+            node->setContentSize({ cw, ch });
+            auto* d = CCDrawNode::create();
+            roundRect(d, { 0.f, 0.f, cw, ch }, 7.f, col({ 24, 27, 36 }, 1.f), active ? 0.9f : 0.5f, active ? col(t.main, 1.f) : white(0.08f));
+            // a little preview: the colour, a switch that's on and a slider, in this theme
+            circle(d, { 15.f, ch / 2.f }, 8.5f, col(t.main, 1.f), 28);
+            circle(d, { 12.5f, ch / 2.f + 2.5f }, 3.f, col(t.soft, 0.7f), 16);
+            roundRect(d, { 30.f, 7.f, 18.f, 9.f }, 4.5f, col(t.main, 1.f));
+            circle(d, { 43.5f, 11.5f }, 3.f, white(1.f), 14);
+            roundRect(d, { 53.f, 9.5f, cw - 61.f, 4.f }, 2.f, white(0.1f));
+            roundRect(d, { 53.f, 9.5f, (cw - 61.f) * 0.6f, 4.f }, 2.f, col(t.soft, 0.9f));
+            if (active) {
+                circle(d, { cw - 10.f, ch - 10.f }, 5.f, col(t.main, 1.f), 20);
+                d->drawSegment({ cw - 12.4f, ch - 10.f }, { cw - 10.6f, ch - 11.8f }, 0.55f, white(1.f));
+                d->drawSegment({ cw - 10.6f, ch - 11.8f }, { cw - 7.6f, ch - 8.4f }, 0.55f, white(1.f));
+            }
+            node->addChild(d);
+            auto* l = CCLabelBMFont::create(t.name, font());
+            l->setColor(active ? m_text : m_muted);
+            l->setAnchorPoint({ 0.f, 0.5f });
+            l->setPosition({ 30.f, ch - 12.f });
+            l->limitLabelWidth(cw - 46.f, 0.46f, 0.2f);
+            node->addChild(l);
+            auto* item = CCMenuItemSpriteExtra::create(node, this, menu_selector(BufferMenu::onTheme));
+            item->m_scaleMultiplier = 1.04f;
+            item->setTag(i);
+            item->setPosition({ L + cw / 2.f + (i % 3) * (cw + 8.f), top - (i / 3) * (ch + 6.f) });
+            m_pageMenu->addChild(item);
+        }
+        label(m_page, "Also in the mod settings (Menu theme).", 0.32f, m_dim, { L, 30.f }, { 0.f, 0.5f });
+    }
+
     void rebuildPage() {
         if (m_page) {
             m_page->removeFromParent();
@@ -5413,6 +5479,7 @@ private:
             case 2: pageOptions(MODES, std::size(MODES)); break;
             case 3: pageFrames(); break;
             case 4: pageTools(); break;
+            case 5: pageThemes(); break;
             default: pageBuffer(); break;
         }
         buildTabs();
@@ -5581,6 +5648,16 @@ private:
             saveModeTicks();
             say("per-mode frames off (stage picked)");
         }
+    }
+
+    // a theme card: use it, and redraw the whole window in it
+    void onTheme(CCObject* sender) {
+        auto const& t = THEMES[sender->getTag()];
+        Mod::get()->setSettingValue<std::string>("menu-theme", t.name);
+        m_t = currentTheme();
+        say("menu theme: {}", t.name);
+        buildFrame();
+        rebuildPage();
     }
 
     // a stage chip: go straight to that stage
@@ -6529,6 +6606,121 @@ namespace {
             });
         }
     }
+
+    // v3.1 auto update: once per game start, in the background, the latest GitHub release of
+    // the mod is checked (pre-releases like the "teste" builds are skipped). A newer one is
+    // downloaded and put in place of this mod's file, but only if it really is this mod and a
+    // newer version; it loads on the next start. The main menu then offers a restart.
+    constexpr char const* UPDATE_REPO = "porqueijjmzm1/Click-After-Frames";
+    bool updateChecked = false;
+    std::string updateInstalled;  // the version installed, waiting to be shown on the main menu
+
+    Result<VersionInfo> packageVersion(ByteVector const& data) {
+        GEODE_UNWRAP_INTO(auto unzip, file::Unzip::create(ByteSpan(data)));
+        GEODE_UNWRAP_INTO(auto bytes, unzip.extract("mod.json"));
+        auto json = matjson::parse(std::string_view(reinterpret_cast<char const*>(bytes.data()), bytes.size()));
+        if (json.isErr()) {
+            return Err("the download has no readable mod.json");
+        }
+        auto info = json.unwrap();
+        if (info["id"].asString().unwrapOr("") != Mod::get()->getID()) {
+            return Err("the download is a different mod");
+        }
+        GEODE_UNWRAP_INTO(auto version, info["version"].asString());
+        return VersionInfo::parse(version);
+    }
+
+    void showUpdatePopup() {
+        auto* scene = CCScene::get();
+        if (updateInstalled.empty() || !scene || !scene->getChildByID("MenuLayer")) {
+            return;
+        }
+        auto version = std::move(updateInstalled);
+        updateInstalled.clear();
+        createQuickPopup("Input Buffer updated",
+            fmt::format("<cg>{}</c> is installed (you were on {}).\nRestart the game to use it.", version,
+                Mod::get()->getVersion().toVString()),
+            "Later", "Restart", [](FLAlertLayer*, bool restart) {
+                if (restart) {
+                    game::restart(true);
+                }
+            });
+    }
+
+    void checkForUpdate() {
+        if (updateChecked || !Mod::get()->getSettingValue<bool>("auto-update")) {
+            return;
+        }
+        updateChecked = true;
+        std::thread([] {
+            auto note = [](std::string text) {
+                queueInMainThread([text] { say("update: {}", text); });
+            };
+            auto res = web::WebRequest()
+                .timeout(std::chrono::seconds(15))
+                .userAgent("InputBuffer")
+                .header("Accept", "application/vnd.github+json")
+                .getSync(fmt::format("https://api.github.com/repos/{}/releases/latest", UPDATE_REPO));
+            if (res.code() == 404) {
+                return note("no public release to check (is the GitHub repo private?)");
+            }
+            if (!res.ok()) {
+                return note(fmt::format("couldn't reach GitHub (error {})", res.code()));
+            }
+            auto json = res.json();
+            if (json.isErr()) {
+                return note("GitHub sent something unexpected");
+            }
+            auto release = json.unwrap();
+            auto latest = VersionInfo::parse(release["tag_name"].asString().unwrapOr(""));
+            if (latest.isErr()) {
+                return note("the latest release has no version tag");
+            }
+            if (!(latest.unwrap() > Mod::get()->getVersion())) {
+                return note(fmt::format("up to date ({} is the latest)", latest.unwrap().toVString()));
+            }
+            std::string url;
+            auto assets = release["assets"];
+            if (assets.isArray()) {
+                for (auto const& asset : assets) {
+                    auto name = asset["name"].asString().unwrapOr("");
+                    if (name.size() > 6 && name.ends_with(".geode")) {
+                        url = asset["browser_download_url"].asString().unwrapOr("");
+                        break;
+                    }
+                }
+            }
+            if (url.empty()) {
+                return note(fmt::format("{} has no .geode file yet", latest.unwrap().toVString()));
+            }
+            auto file = web::WebRequest()
+                .timeout(std::chrono::seconds(120))
+                .userAgent("InputBuffer")
+                .followRedirects(true)
+                .getSync(url);
+            if (!file.ok()) {
+                return note(fmt::format("the download failed (error {})", file.code()));
+            }
+            auto data = std::move(file).data();
+            auto version = packageVersion(data);
+            if (version.isErr()) {
+                return note("the download isn't a valid Input Buffer build, not installed");
+            }
+            auto newVersion = version.unwrap();
+            if (!(newVersion > Mod::get()->getVersion())) {
+                return note(fmt::format("the download is {}, not newer, not installed", newVersion.toVString()));
+            }
+            if (file::writeBinarySafe(Mod::get()->getPackagePath(), ByteSpan(data)).isErr()) {
+                return note("couldn't write the new file into the mods folder");
+            }
+            std::string done = newVersion.toVString();
+            queueInMainThread([done] {
+                say("update: {} installed, restart the game to use it", done);
+                updateInstalled = done;
+                showUpdatePopup();
+            });
+        }).detach();
+    }
 }
 
 $on_mod(Loaded) {
@@ -6544,7 +6736,8 @@ $on_mod(Loaded) {
     }).leak();
 }
 
-// the main menu: a mouse button that opens the menu (with the other buttons at the bottom)
+// the main menu: a mouse button that opens the menu (with the other buttons at the bottom),
+// and the update check
 class $modify(BufMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) {
@@ -6560,6 +6753,10 @@ class $modify(BufMenuLayer, MenuLayer) {
         if (auto* bottom = this->getChildByID("bottom-menu")) {
             bottom->addChild(item);
             bottom->updateLayout();
+        }
+        checkForUpdate();
+        if (!updateInstalled.empty()) {
+            queueInMainThread([] { showUpdatePopup(); });
         }
         return true;
     }

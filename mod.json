@@ -5,7 +5,7 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v3.0.1",
+	"version": "v3.1.0",
 	"id": "timbodev.input-buffer",
 	"name": "Input Buffer",
 	"developer": "timbodev",
@@ -300,6 +300,12 @@
 			"description": "Hide the 'CBF | stage' label shown in the bottom left of levels while the buffer is on.",
 			"default": false
 		},
+		"auto-update": {
+			"type": "bool",
+			"name": "Auto update",
+			"description": "On game start, check the mod's GitHub releases for a newer version. If there is one it's downloaded and installed in the background (only if it really is this mod and newer), and the main menu asks you to restart the game to use it.",
+			"default": true
+		},
 		"hide-menu-buttons": {
 			"type": "bool",
 			"name": "Hide menu buttons",
@@ -407,7 +413,11 @@
 				"Blue",
 				"Purple",
 				"Pink",
+				"Red",
+				"Orange",
+				"Gold",
 				"Green",
+				"Teal",
 				"Dark"
 			]
 		},
