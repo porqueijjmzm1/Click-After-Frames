@@ -9,6 +9,7 @@ on:
   push:
     branches: [main, ccr-b5c0153f-magtn3]
     tags: ['v*']
+    paths-ignore: ['docs/**', 'scripts/**', '.github/workflows/pages.yml', 'README.md']
 jobs:
   build:
     strategy:

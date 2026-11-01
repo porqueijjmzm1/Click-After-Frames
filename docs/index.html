@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kosmos · early clicks, right on time</title>
+  <meta name="description" content="Kosmos is a Geode mod for Geometry Dash: an input buffer that predicts your path, so a click made a little too early lands on the right tick. Nine animated menu themes, auto update, Windows, Android and macOS.">
+  <meta name="theme-color" content="#0b0c1a">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Kosmos">
+  <meta property="og:title" content="Kosmos · early clicks, right on time">
+  <meta property="og:description" content="A Geode mod for Geometry Dash that holds a too-early click until the tick where it works. Animated themes, auto update, Windows / Android / macOS.">
+  <meta property="og:url" content="https://porqueijjmzm1.github.io/Click-After-Frames/">
+  <meta property="og:image" content="https://porqueijjmzm1.github.io/Click-After-Frames/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://porqueijjmzm1.github.io/Click-After-Frames/assets/og.png">
+  <link rel="preload" href="assets/Exo2.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav" id="top">
+    <div class="wrap nav-row">
+      <a class="brand" href="#top" aria-label="Kosmos, back to top">
+        <img src="assets/saturn.png" alt="" width="34" height="34">
+        <span>Kosmos</span>
+      </a>
+      <nav class="links" id="links" aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#themes">Themes</a>
+        <a href="#install">Install</a>
+        <a href="#settings">Settings</a>
+        <a href="#changelog">Changelog</a>
+        <a href="#faq">FAQ</a>
+        <a href="#" data-discord hidden>Discord</a>
+      </nav>
+      <a class="btn btn-primary btn-small" data-download href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/latest/download/Kosmos.geode">Download</a>
+      <button class="menu-toggle" id="menuToggle" aria-label="Open the sections" aria-expanded="false" aria-controls="links">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- the start -->
+    <section class="hero wrap">
+      <div class="hero-text">
+        <p class="kicker"><span class="dot"></span><span data-version>v3.5.0</span> · Geode mod for Geometry Dash</p>
+        <h1>Early clicks,<br><span class="glow">right on time.</span></h1>
+        <p class="lead">Kosmos is an input buffer. When you click a little too early, it runs your path ahead in a hidden copy of the level, and holds the click until the tick where it works. Clicks that are already fine go straight through.</p>
+        <div class="cta">
+          <a class="btn btn-primary" data-download href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/latest/download/Kosmos.geode">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16" /></svg>
+            <span>Download <span data-version>v3.5.0</span></span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/porqueijjmzm1/Click-After-Frames">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" /></svg>
+            <span>Source on GitHub</span>
+          </a>
+        </div>
+        <ul class="facts">
+          <li>Geometry Dash <b>2.2081</b></li>
+          <li>Geode <b>5.11</b></li>
+          <li>Windows · Android · macOS</li>
+          <li>Free and open source</li>
+        </ul>
+      </div>
+      <figure class="hero-menu">
+        <div class="menu-frame">
+          <canvas id="menu" width="880" height="552" aria-label="The Kosmos menu, as it looks in the game. You can tap the tabs, the stages and the switches."></canvas>
+        </div>
+        <figcaption>The real menu, drawn live. Tap the tabs, the stages and the switches.</figcaption>
+      </figure>
+    </section>
+
+    <!-- what it does -->
+    <section class="block wrap" id="features">
+      <header class="block-head">
+        <p class="eyebrow">Features</p>
+        <h2>A second chance for every early click</h2>
+        <p>Everything the buffer does, and what it gives you around it.</p>
+      </header>
+      <div class="grid features">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 6h12M4 12h16M4 18h9" /></svg></div>
+          <h3>Up to 8 frames of room</h3>
+          <p>Pick how early a click may be: 0.5, 1, 2, 4, 6 or 8 frames, your own custom amount, or off. Every game mode can also have its own limit.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="1.6" /><circle cx="11" cy="12" r="1.9" /><circle cx="18" cy="6" r="2.3" /></svg></div>
+          <h3>Sees what's coming</h3>
+          <p>The hidden ghost plays your next ticks with the real physics: orbs, pads, gravity and speed portals, mode portals, move triggers and moving objects.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3" /><rect x="10" y="10" width="4" height="4" rx="1" /></svg></div>
+          <h3>Smart in every mode</h3>
+          <p>Cube, ship, ball, UFO, wave, robot, spider and swing each get their own rules, like feathering in ship, hold lengths for robot and spam handling in wave.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z" /></svg></div>
+          <h3>No stutter</h3>
+          <p>All the predictions in a frame share a small slice of it, and a long search carries on over the next ticks. Low latency mode keeps fast clicks untouched.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 18 9 9l4 6 3-4 4 7" /><circle cx="9" cy="9" r="1.2" /></svg></div>
+          <h3>Learns your levels</h3>
+          <p>Level memory remembers which delays worked at each spot and where you keep dying, and gives you more room there. A heatmap shows your deaths on the progress bar.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5" /></svg></div>
+          <h3>Tools to practise</h3>
+          <p>Path view draws where an input would take you. Training mode only gives hints and never changes a click. A ding or a green flash tells you when you were saved.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" /><ellipse cx="12" cy="12" rx="10" ry="3.2" transform="rotate(-20 12 12)" /></svg></div>
+          <h3>Nine animated themes</h3>
+          <p>Deep space, planets and phenomena: each theme redraws the whole menu with its own moving art. Stars drift, comets fall, the aurora waves.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" /></svg></div>
+          <h3>Updates itself</h3>
+          <p>When a new version is out, a window shows what's new and asks before downloading. Settings are saved as you go, so a crash never loses them.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- how it works -->
+    <section class="block wrap" id="how">
+      <header class="block-head">
+        <p class="eyebrow">How it works</p>
+        <h2>Three steps, in a few milliseconds</h2>
+      </header>
+      <ol class="steps">
+        <li class="card">
+          <span class="num">1</span>
+          <h3>You click</h3>
+          <p>Before the click reaches the game, Kosmos asks: would it work right now?</p>
+        </li>
+        <li class="card">
+          <span class="num">2</span>
+          <h3>The ghost tries it</h3>
+          <p>A hidden copy of your player runs the next ticks with the click now, then a tick later, then later still, up to your stage's limit.</p>
+        </li>
+        <li class="card">
+          <span class="num">3</span>
+          <h3>It lands on time</h3>
+          <p>If now is fine, the click goes straight through. If now crashes and a later tick survives, the click is held until that tick.</p>
+        </li>
+      </ol>
+      <div class="timeline card" aria-hidden="true">
+        <div class="tl-row">
+          <span class="tl-label">Your click</span>
+          <div class="tl-track"><span class="tl-click"></span></div>
+        </div>
+        <div class="tl-row">
+          <span class="tl-label">Reaches the game</span>
+          <div class="tl-track"><span class="tl-held"></span><span class="tl-land"></span></div>
+        </div>
+        <div class="tl-ticks"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p class="tl-note">A click 3 ticks early is held, then lands on the tick where the jump clears the spikes.</p>
+      </div>
+    </section>
+
+    <!-- themes -->
+    <section class="block wrap" id="themes">
+      <header class="block-head">
+        <p class="eyebrow">Themes</p>
+        <h2>Pick a sky</h2>
+        <p>Each theme changes the whole menu: its gradient, the moving art behind it, the accent colours and the text. Try one: this page changes with it.</p>
+      </header>
+      <div id="themeGroups" class="theme-groups"></div>
+    </section>
+
+    <!-- install -->
+    <section class="block wrap" id="install">
+      <header class="block-head">
+        <p class="eyebrow">Install</p>
+        <h2>Ready in a minute</h2>
+      </header>
+      <div class="install">
+        <ol class="install-steps">
+          <li>
+            <h3>Get Geode</h3>
+            <p>Kosmos is a <a href="https://geode-sdk.org">Geode</a> mod. Install Geode for Geometry Dash 2.2081 first.</p>
+          </li>
+          <li>
+            <h3>Download Kosmos</h3>
+            <p><a data-download href="https://github.com/porqueijjmzm1/Click-After-Frames/releases/latest/download/Kosmos.geode">Kosmos.geode</a>: one file for Windows, Android and macOS.</p>
+          </li>
+          <li>
+            <h3>Put it in the mods folder</h3>
+            <div class="tabs" role="tablist" aria-label="Your platform">
+              <button role="tab" aria-selected="true" data-os="win">Windows</button>
+              <button role="tab" aria-selected="false" data-os="android">Android</button>
+              <button role="tab" aria-selected="false" data-os="mac">macOS</button>
+            </div>
+            <div class="os" data-os-panel="win">
+              <p>Open the game's folder (on Steam: right-click Geometry Dash, <i>Manage</i>, <i>Browse local files</i>) and put the file in:</p>
+              <code>geode\mods</code>
+            </div>
+            <div class="os" data-os-panel="android" hidden>
+              <p>With a file manager, put the file in:</p>
+              <code>Android/media/com.geode.launcher/game/geode/mods</code>
+            </div>
+            <div class="os" data-os-panel="mac" hidden>
+              <p>In Finder, press <kbd>Cmd</kbd> <kbd>Shift</kbd> <kbd>G</kbd> and go to:</p>
+              <code>~/Library/Application Support/GeometryDash/geode/mods</code>
+            </div>
+          </li>
+          <li>
+            <h3>Restart the game</h3>
+            <p>Open the menu with the Saturn button on the main menu or the pause menu, <kbd>Right Shift</kbd>, or <kbd>7</kbd> in a level.</p>
+          </li>
+        </ol>
+        <aside class="card note">
+          <h3>Coming from Input Buffer?</h3>
+          <p>Kosmos is the same mod with a new name, so your settings carry over. Delete the old file (<code>InputBuffer.geode</code>, <code>TESTEBUFFER.geode</code> or <code>basu.input-buffer.geode</code>) or both will run at once.</p>
+          <h3>Updates</h3>
+          <p>You only install once. When a new version is out, a window on the main menu shows what's new and asks before downloading.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- keys -->
+    <section class="block wrap" id="controls">
+      <header class="block-head">
+        <p class="eyebrow">Keys</p>
+        <h2>Everything at hand</h2>
+        <p>These work inside a level. Change any of them in the mod's settings or in Geode's keybinds popup.</p>
+      </header>
+      <div class="keys">
+        <div class="key card"><kbd>6</kbd><span>Next stage: 0.5f, 1f, 2f, 4f, 6f, 8f, custom, off</span></div>
+        <div class="key card"><kbd>7</kbd><span>Open the menu</span></div>
+        <div class="key card"><kbd>Right Shift</kbd><span>Open or close the menu, anywhere</span></div>
+        <div class="key card"><kbd>F8</kbd><span>Copy the console log</span></div>
+        <div class="key card"><kbd>F9</kbd><span>Show or hide the console</span></div>
+        <div class="key card"><kbd>F10</kbd><span>Path view on or off</span></div>
+        <div class="key card"><kbd>F11</kbd><span>Forget this level's memory</span></div>
+        <div class="key card"><kbd>Saturn</kbd><span>Button on the main and pause menus (great on phones)</span></div>
+      </div>
+    </section>
+
+    <!-- every setting -->
+    <section class="block wrap" id="settings">
+      <header class="block-head">
+        <p class="eyebrow">Settings</p>
+        <h2>Every setting, explained</h2>
+        <p>The same list as in the game, with the defaults. Most people never need to change them.</p>
+      </header>
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m20 20-4.5-4.5" /></svg>
+        <input id="settingSearch" type="search" placeholder="Search settings, like 'wave' or 'orb'" aria-label="Search settings">
+        <span id="settingCount" class="count"></span>
+      </div>
+      <div id="settingGroups" class="setting-groups"></div>
+    </section>
+
+    <!-- what's new -->
+    <section class="block wrap" id="changelog">
+      <header class="block-head">
+        <p class="eyebrow">Changelog</p>
+        <h2>What's new</h2>
+        <p>Straight from the <a href="https://github.com/porqueijjmzm1/Click-After-Frames/releases">releases on GitHub</a>.</p>
+      </header>
+      <div id="releases" class="releases">
+        <p class="muted">Loading the releases...</p>
+      </div>
+    </section>
+
+    <!-- questions -->
+    <section class="block wrap" id="faq">
+      <header class="block-head">
+        <p class="eyebrow">FAQ</p>
+        <h2>Questions</h2>
+      </header>
+      <div class="faq">
+        <details>
+          <summary>Can I use it for leaderboards or demon lists?</summary>
+          <p>Kosmos changes when your clicks reach the game, and many leaderboards and lists don't accept runs made with mods like that. Check the rules before you submit a run. While the buffer is on, levels show a small label in the corner. To practise without changing a single click, turn on <b>Training mode</b>: it only shows hints.</p>
+        </details>
+        <details>
+          <summary>My clicks feel delayed. What do I do?</summary>
+          <p>Keep <b>Low latency mode</b> on (it is by default): fast clicks are never shifted. You can also pick a smaller stage, like 1f or 2f, or give each game mode its own limit in the Frames tab.</p>
+        </details>
+        <details>
+          <summary>The game stutters when I click.</summary>
+          <p>Keep <b>Auto time budget</b> on (it is by default) so predictions share a small part of each frame. On slow PCs, turn on <b>Performance mode</b> as well.</p>
+        </details>
+        <details>
+          <summary>Does it work with Click Between Frames?</summary>
+          <p>Yes. With <b>Click Between Frames sync</b> on, the prediction starts from the exact moment inside the tick where your click landed.</p>
+        </details>
+        <details>
+          <summary>Does it work on phones?</summary>
+          <p>Yes, on Android. Without a keyboard, open the menu with the Saturn button on the main menu or in the pause menu.</p>
+        </details>
+        <details>
+          <summary>How do I change the theme?</summary>
+          <p>In the menu's <b>Themes</b> tab, or the <i>Menu theme</i> setting in Geode. You can also try them on this page.</p>
+        </details>
+        <details>
+          <summary>I found a bug.</summary>
+          <p>Open an <a href="https://github.com/porqueijjmzm1/Click-After-Frames/issues">issue on GitHub</a><span data-discord-inline hidden> or tell us on <a href="#" data-discord>Discord</a></span>. The console log helps a lot: press <kbd>F8</kbd> in a level (or Tools, Copy log) and paste it.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- community -->
+    <section class="block wrap community">
+      <div class="card join">
+        <img src="assets/saturn.png" alt="" width="72" height="72">
+        <div>
+          <h2>Made for players, by a player</h2>
+          <p>Ideas, bugs, or a theme you'd love to see? Say hi.</p>
+        </div>
+        <div class="join-buttons">
+          <a class="btn btn-primary" href="#" data-discord hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M19.6 5.6A16 16 0 0 0 15.6 4.4l-.5 1a15 15 0 0 0-6.2 0l-.5-1a16 16 0 0 0-4 1.2C1.9 9.4 1.2 13.1 1.5 16.8a16 16 0 0 0 4.9 2.5l1-1.6a10 10 0 0 1-1.6-.8l.4-.3a11.4 11.4 0 0 0 11.6 0l.4.3a10 10 0 0 1-1.6.8l1 1.6a16 16 0 0 0 4.9-2.5c.4-4.3-.7-8-2.9-11.2ZM8.9 14.6c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.8.9 1.7 2c0 1.1-.8 2-1.7 2Zm6.2 0c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.8.9 1.7 2c0 1.1-.8 2-1.7 2Z" /></svg>
+            <span>Join the Discord</span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/porqueijjmzm1/Click-After-Frames/issues">Report a bug</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <div class="brand small">
+        <img src="assets/saturn.png" alt="" width="26" height="26">
+        <span>Kosmos</span>
+      </div>
+      <p>Made by <b>timbodev</b>. Based on <a href="https://github.com/raresdalas1009/-predictive-input-buffer">Click Before Frames</a> by BASU. Built with <a href="https://geode-sdk.org">Geode</a>. Font: Exo 2 (<a href="assets/OFL-Exo2.txt">SIL Open Font License</a>).</p>
+      <p class="muted">Not affiliated with RobTop Games.</p>
+    </div>
+  </footer>
+
+  <script src="js/settings-data.js"></script>
+  <script src="js/themes.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
