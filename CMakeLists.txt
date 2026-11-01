@@ -19,4 +19,11 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
+# Geode's iOS bindings define the FMOD functions the game has built in, but the generated
+# source never includes FMOD's header, so FMOD_RESULT & co. are unknown there. Hand it the
+# header (iOS only; the other platforms link FMOD and don't generate these).
+if ((GEODE_TARGET_PLATFORM STREQUAL "iOS" OR IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS") AND TARGET GeodeBindings)
+    target_compile_options(GeodeBindings PRIVATE "SHELL:-include fmod.h")
+endif()
+
 setup_geode_mod(${PROJECT_NAME})
