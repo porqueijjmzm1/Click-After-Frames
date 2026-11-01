@@ -880,11 +880,12 @@ namespace {
     }
 
     void dropGhosts() {
-#ifdef GEODE_IS_ANDROID
+#ifdef GEODE_IS_MOBILE
         // v2.87 Android: the ghosts are linked to the level that is closing, and deleting them
         // while it was being torn down crashed on Android (the freed memory is reused at once,
         // so the crash showed up in random other mods: music, labels, the scheduler). They're
-        // only let go of here; a hidden player per level is a small cost.
+        // only let go of here; a hidden player per level is a small cost. v3.6: iOS too (the
+        // same game code on a phone).
         buf.ghost1 = nullptr;
         buf.ghost2 = nullptr;
         buf.ghostLayer = nullptr;
